@@ -21,7 +21,7 @@
 7. 洛雪 lxmusic 源：播放解析依赖用户提供的洛雪自定义源脚本 URL（LX_SOURCE_URL）。非交互安装选 lxmusic 时必须携带 --lx-source-url '<URL>'；安装器会在容器内做全链路校验（下载→初始化→搜索→解析→探活）。校验失败分类提示，Agent 应把原始错误转告用户而不是自行编造 URL。仅当用户明确接受“源暂不可用也要先装好”时才可追加 --lx-skip-verify（跳过校验直接激活，源状态装好后在 WebUI 查看）。
 8. 一键扩展 ./extend.sh 与一键还原 ./restore.sh（含彻底清理 ./restore.sh --full）必须始终保持可用；扩展失败必须安全秒级回滚到官方直连。
 9. 单机单部署：代理单元名、音源容器名与安装锁全局唯一，本机以 /var/lib/fnmusic-ext/deployment 登记当前部署目录。从另一份仍存在的仓库副本执行安装/扩展/还原会被拒绝；Agent 不得用克隆目录绕过，应在原部署目录操作，或经用户确认后使用 --adopt 显式迁移部署。原登记目录已删除时不拦截。
-10. WebUI（端口 8774）无鉴权，仅限可信内网；安装开关为 --webui / --no-webui，非交互默认不装。
+10. WebUI（端口 8774）需要管理密码。安装开关为 --webui / --no-webui，非交互默认不装。启用 WebUI 时必须先设置环境变量 FNMUSIC_WEBUI_PASSWORD（至少 8 位），脚本读完即丢弃，只把哈希写入 .env；禁止把密码写进命令行参数、日志或汇报。升级时 .env 已有哈希则不必再输入。
 
 【自动化部署执行步骤】
 
@@ -37,8 +37,8 @@
 
 步骤 3：执行安装与一步到位启用（--extend）
 推荐命令（按用户所选音源三选一）：
-  - 网易云 musicbox（含 WebUI）：
-    ./install.sh --non-interactive --sources musicbox --webui --extend
+  - 网易云 musicbox（含 WebUI；密码放环境变量，不要写进命令行）：
+    FNMUSIC_WEBUI_PASSWORD='<至少 8 位>' ./install.sh --non-interactive --sources musicbox --webui --extend
   - musicdl（默认精选酷我+咪咕；平台粒度用 musicdl-<短名> 或编号）：
     ./install.sh --non-interactive --sources musicdl --extend
   - 洛雪 lxmusic（--lx-source-url 必填）：
@@ -66,7 +66,7 @@
 【完成汇报规范】
 任务完成后用简短中文输出总结，内容包含：
 1. 部署形态确认（Docker 单容器 + 宿主机核心代理）与环境预检结论；
-2. 所选音源与端口（musicdl 127.0.0.1:8768 / musicbox 0.0.0.0:8770 / lxmusic 127.0.0.1:8772）及 WebUI 是否安装（8774）；
+2. 所选音源与端口（musicdl 127.0.0.1:8768 / musicbox 127.0.0.1:8770 / lxmusic 127.0.0.1:8772）及 WebUI 是否安装（8774，需管理密码；汇报时不要复述密码）；
 3. 洛雪源校验结论（若适用：源名称/版本/推导平台）；每日推荐是否开启（严禁复述敏感密钥）；
 4. healthz 接口探测响应 JSON；
 5. extend 链路接管与验收状态。
