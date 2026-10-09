@@ -5,7 +5,7 @@
   "project": {
     "repository": "https://github.com/Surc/fnos_music_ext",
     "default_branch": "main",
-    "version": "2.7.1",
+    "version": "2.8.0",
     "app_id": "fnmusic-ext",
     "context_entry": "AGENTS.md",
     "iteration_document": "docs/ITERATION.md"
@@ -195,7 +195,7 @@
   "planned_work": [
     {
       "id": "netease-cross-platform-download-fallback",
-      "status": "planned",
+      "status": "implemented",
       "requested_on": "2026-10-09",
       "included_in_release": false,
       "requirements": [
@@ -207,7 +207,44 @@
         "preserve_primary_provider_selection",
         "reject_wrong_versions_or_preview_only_candidates"
       ],
-      "design_document": "docs/ITERATION.md"
+      "design_document": "docs/ITERATION.md",
+      "implementation_candidate": {
+        "project_version": "2.8.0",
+        "branch": "feat/download-fallback",
+        "origin": "independent_implementation_using_existing_musicdl_api",
+        "modules": [
+          "proxy/download_fallback.py",
+          "proxy/fallback_control.py",
+          "tests/integration/download_fallback_contract.py"
+        ],
+        "user_document": "docs/DOWNLOAD_FALLBACK.md",
+        "full_ci": {
+          "url": "https://github.com/Surc/fnos_music_ext/actions/runs/37921652490",
+          "tested_head_commit": "8550ecd63dbd40b197ce2d741591916111971a04",
+          "conclusion": "success",
+          "checks_passed": 11,
+          "pytest": {
+            "3.11": {
+              "passed": 857,
+              "failed": 0,
+              "skipped": 0
+            },
+            "3.13": {
+              "passed": 857,
+              "failed": 0,
+              "skipped": 0
+            }
+          },
+          "production_contracts": "six_groups_passed",
+          "non_root_container_fallback_lifecycle": "passed",
+          "fpk_build_and_sha256_verification": "passed",
+          "fpk_artifact_name": "fnmusic-ext-fpk"
+        },
+        "nas_acceptance": "pending",
+        "code_commit": "8550ecd63dbd40b197ce2d741591916111971a04",
+        "pull_request": "https://github.com/Surc/fnos_music_ext/pull/3"
+      },
+      "implemented_on": "2026-10-09"
     }
   ]
 }

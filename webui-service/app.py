@@ -82,6 +82,12 @@ SCHEMA: dict[str, dict] = {
     "FNMUSIC_OFFICIAL_BIND_TIMEOUT_S": {"kind": "int", "default": "120", "min": 10, "max": 3600, "group": "tee", "reload": "hot", "label": "官方绑定等待（秒）"},
     "FNMUSIC_TEE_HANDOFF_MAX": {"kind": "int", "default": "3", "min": 0, "max": 20, "group": "tee", "reload": "hot", "label": "切歌续传并行数"},
     "FNMUSIC_LIBRARY_SCAN_PATH": {"kind": "str", "default": "", "group": "tee", "reload": "hot", "label": "曲库重扫接口（选填）"},
+    "FNMUSIC_DOWNLOAD_FALLBACK_ENABLED": {"kind": "bool", "default": "false", "group": "tee", "reload": "process", "label": "网易下载跨平台补源"},
+    "FNMUSIC_DOWNLOAD_FALLBACK_SOURCES": {"kind": "csv", "values": ["kuwo", "migu", "kugou", "qq"], "default": "kuwo,migu", "group": "tee", "reload": "hot", "label": "备用平台顺序"},
+    "FNMUSIC_DOWNLOAD_FALLBACK_TARGET": {"kind": "enum", "values": ["lossless", "320k"], "default": "lossless", "group": "tee", "reload": "hot", "label": "下载目标音质"},
+    "FNMUSIC_DOWNLOAD_FALLBACK_ALLOW_DOWNGRADE": {"kind": "bool", "default": "false", "group": "tee", "reload": "hot", "label": "允许音质降级"},
+    "FNMUSIC_DOWNLOAD_FALLBACK_BUDGET_S": {"kind": "int", "default": "180", "min": 30, "max": 600, "group": "tee", "reload": "hot", "label": "单曲下载预算（秒）"},
+    "FNMUSIC_DOWNLOAD_FALLBACK_MAX_MB": {"kind": "int", "default": "150", "min": 10, "max": 1024, "group": "tee", "reload": "hot", "label": "单个下载文件上限（MB）"},
     "FNMUSIC_LLM_BASE_URL": {"kind": "str", "default": "", "group": "llm", "reload": "hot", "label": "OpenAI 兼容 Base URL"},
     "FNMUSIC_LLM_API_KEY": {"kind": "secret", "default": "", "group": "llm", "reload": "hot", "label": "API Key"},
     "FNMUSIC_LLM_MODEL": {"kind": "str", "default": "gpt-4o-mini", "group": "llm", "reload": "hot", "label": "模型"},
@@ -189,6 +195,25 @@ PROVIDER_PROGRAMS = {
 }
 PROVIDER_PROGRAM = {"musicdl": "musicdl", "musicbox": "musicbox", "lxmusic": "lxmusic"}  # 兼容单名引用
 PROVIDER_HEALTH = {"musicdl": CONF["musicdl_url"], "musicbox": CONF["musicbox_url"], "lxmusic": CONF["lx_url"]}
+
+
+def reconcile_download_fallback(before: dict, after: dict) -> list[dict]:
+    key = "FNMUSIC_DOWNLOAD_FALLBACK_ENABLED"
+    def active(values):
+        return current_provider(values) == "musicbox" and str(values.get(key, "false")).lower() == "true"
+    was, now = active(before), active(after)
+    if was == now:
+        return []
+    operation = "start" if now else "stop"
+    code, out = supervisorctl(operation, "fallback-control")
+    actions = [{"kind": "process", "program": "fallback-control", "op": operation,
+                "ok": code == 0, "error": "" if code == 0 else out}]
+    if not now:
+        # Stop the dedicated auxiliary even if the controller had crashed.
+        code, out = supervisorctl("stop", "musicdl-fallback")
+        actions.append({"kind": "process", "program": "musicdl-fallback", "op": "stop",
+                        "ok": code == 0 or "not running" in out.lower(), "error": "" if code == 0 else out})
+    return actions
 
 
 def switch_provider_process(old: str, new: str) -> list[dict]:
@@ -352,6 +377,8 @@ def _normalize_value(key: str, raw) -> str:
                 raise ValueError(f"{key}: 不支持的分类 {item}")
             if item and item not in items:
                 items.append(item)
+        if key == "FNMUSIC_DOWNLOAD_FALLBACK_SOURCES" and not items:
+            raise ValueError("备用平台不能为空")
         return ",".join(items)
     if kind == "time":
         text = str(raw).strip()
@@ -616,6 +643,7 @@ async def api_config_put(body: ConfigBody, request: Request):
 
     # 预览收尾：保存启用的转正常驻，其余预览进程立即停止
     actions.extend(preview_reconcile_after_save())
+    actions.extend(reconcile_download_fallback(before, after))
 
     restart_keys = [k for k in changed if SCHEMA.get(k, {}).get("reload") == "restart"]
     return {"ok": True, "changed": changed, "actions": actions, "restart_keys": restart_keys}

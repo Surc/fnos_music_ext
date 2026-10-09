@@ -56,13 +56,17 @@ def _startup_sources() -> "tuple[list[str], str]":
         env_path = Path(os.environ.get("FNMUSIC_ENV_FILE", "/repo/.env"))
         try:
             kv, _ = parse_env_file(env_path)
-            raw = (dict(kv).get("MUSICDL_SOURCES") or "").strip()
+            source_key = ("FNMUSIC_DOWNLOAD_FALLBACK_SOURCES" if os.environ.get("MUSICDL_FALLBACK_MODE") == "true"
+                          else "MUSICDL_SOURCES")
+            raw = (dict(kv).get(source_key) or "").strip()
         except Exception:
             raw = ""
         if raw:
             origin = f"env file {env_path}"
     if not raw:
-        raw = os.environ.get("MUSICDL_SOURCES", "").strip()
+        source_key = ("FNMUSIC_DOWNLOAD_FALLBACK_SOURCES" if os.environ.get("MUSICDL_FALLBACK_MODE") == "true"
+                      else "MUSICDL_SOURCES")
+        raw = os.environ.get(source_key, "").strip()
         if raw:
             origin = "process env"
     if not raw:
@@ -328,9 +332,9 @@ def _search_playable(source: str, keyword: str, fetch_size: int, limit: int,
     """Keep search and bounded probes inside the same source admission slot.
 
     Return metadata only; a timed-out worker must not update shared caches.
-    Probes fan out on the shared pool; each confirmed entry is handed to
-    `progress` immediately (same handoff timing as the old serial loop), and
-    the return value keeps library order.
+    Probes fan out on the shared pool; confirmed entries are handed to
+    `progress` immediately with library rank. Both the bounded snapshot and
+    the return value select the same earliest confirmed candidates.
     """
     songs = _search_one_source(source, keyword, fetch_size)
     candidates = []
@@ -354,6 +358,7 @@ def _search_playable(source: str, keyword: str, fetch_size: int, limit: int,
         return []
 
     valid = set()
+    completed = set()
     futures = {}
     for idx, (item, headers, _) in enumerate(candidates):
         futures[_PROBE_POOL.submit(_probe_playable_sync, item["download_url"], headers)] = idx
@@ -361,11 +366,16 @@ def _search_playable(source: str, keyword: str, fetch_size: int, limit: int,
         wait_budget = None if deadline is None else max(0.1, deadline - time.monotonic())
         for fut in as_completed(futures, timeout=wait_budget):
             idx = futures[fut]
+            completed.add(idx)
             if fut.result():
                 valid.add(idx)
                 if progress is not None:
-                    progress.append(candidates[idx])
-                if len(valid) >= limit:
+                    progress.append(candidates[idx], rank=idx)
+            if len(valid) >= limit:
+                # A later fast probe must not displace an earlier valid song.
+                # Stop once every candidate up to the nth valid result is known.
+                cutoff = sorted(valid)[limit - 1]
+                if all(i in completed for i in range(cutoff + 1)):
                     break
     except FuturesTimeoutError:
         if progress is not None:
@@ -374,7 +384,7 @@ def _search_playable(source: str, keyword: str, fetch_size: int, limit: int,
         for fut in futures:
             fut.cancel()
 
-    return [entry for idx, entry in enumerate(candidates) if idx in valid]
+    return [entry for idx, entry in enumerate(candidates) if idx in valid][:limit]
 
 
 async def _refresh_by_keyword(song_id: str) -> dict | None:

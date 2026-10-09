@@ -130,6 +130,12 @@ function applyConfigToForm() {
   $("#lyric-auto-dl").checked = v.FNMUSIC_LYRIC_AUTO_DL === "true";
   $("#fav-autobind").checked = v.FNMUSIC_FAV_AUTO_BIND === "true";
   $("#tee-dir").value = v.FNMUSIC_TEE_SAVE_DIR || "";
+  $("#fallback-enabled").checked = v.FNMUSIC_DOWNLOAD_FALLBACK_ENABLED === "true";
+  $("#fallback-sources").value = v.FNMUSIC_DOWNLOAD_FALLBACK_SOURCES || "kuwo,migu";
+  $("#fallback-target").value = v.FNMUSIC_DOWNLOAD_FALLBACK_TARGET || "lossless";
+  $("#fallback-downgrade").checked = v.FNMUSIC_DOWNLOAD_FALLBACK_ALLOW_DOWNGRADE === "true";
+  $("#fallback-budget").value = v.FNMUSIC_DOWNLOAD_FALLBACK_BUDGET_S || "180";
+  $("#fallback-max-mb").value = v.FNMUSIC_DOWNLOAD_FALLBACK_MAX_MB || "150";
   $("#tee-max").value = v.FNMUSIC_TEE_CACHE_MAX || "2";
   $("#bind-timeout").value = v.FNMUSIC_OFFICIAL_BIND_TIMEOUT_S || "120";
   $("#handoff-max").value = v.FNMUSIC_TEE_HANDOFF_MAX != null ? v.FNMUSIC_TEE_HANDOFF_MAX : "3";
@@ -190,6 +196,12 @@ function collectConfig() {
     FNMUSIC_LYRIC_AUTO_DL: $("#lyric-auto-dl").checked,
     FNMUSIC_FAV_AUTO_BIND: $("#fav-autobind").checked,
     FNMUSIC_TEE_SAVE_DIR: $("#tee-dir").value.trim(),
+    FNMUSIC_DOWNLOAD_FALLBACK_ENABLED: $("#fallback-enabled").checked,
+    FNMUSIC_DOWNLOAD_FALLBACK_SOURCES: $("#fallback-sources").value.trim(),
+    FNMUSIC_DOWNLOAD_FALLBACK_TARGET: $("#fallback-target").value,
+    FNMUSIC_DOWNLOAD_FALLBACK_ALLOW_DOWNGRADE: $("#fallback-downgrade").checked,
+    FNMUSIC_DOWNLOAD_FALLBACK_BUDGET_S: parseInt($("#fallback-budget").value || "180", 10),
+    FNMUSIC_DOWNLOAD_FALLBACK_MAX_MB: parseInt($("#fallback-max-mb").value || "150", 10),
     FNMUSIC_TEE_CACHE_MAX: parseInt($("#tee-max").value || "2", 10),
     FNMUSIC_OFFICIAL_BIND_TIMEOUT_S: parseInt($("#bind-timeout").value || "120", 10) || 120,
     FNMUSIC_TEE_HANDOFF_MAX: parseInt($("#handoff-max").value || "3", 10) || 0,

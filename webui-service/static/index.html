@@ -194,6 +194,16 @@
       <section class="page" id="page-tee">
         <h2>边听边存</h2>
         <div class="card">
+          <label class="switch-row"><span>网易下载跨平台补源<div class="sub">网易云下载失败或达不到目标音质时，在备用平台寻找同一首歌。只在网易云为主音源时生效，默认关闭。</div></span><input type="checkbox" id="fallback-enabled"></label>
+          <label class="field"><span>备用平台顺序</span><input class="input" id="fallback-sources" placeholder="kuwo,migu"></label>
+          <p class="hint">支持 kuwo（酷我）、migu（咪咕）、kugou（酷狗）、qq（QQ音乐），用英文逗号分隔；只会保存歌名、歌手、版本和时长均匹配的完整音频。</p>
+          <label class="field"><span>目标音质</span><select class="input" id="fallback-target"><option value="lossless">无损编码格式</option><option value="320k">320 kbps 或更高</option></select></label>
+          <label class="switch-row"><span>全部平台达不到目标时允许降级<div class="sub">开启后保存验证通过的最高可用音质；关闭时下载失败，不把低音质当作目标音质交付。</div></span><input type="checkbox" id="fallback-downgrade"></label>
+          <label class="field"><span>单曲预算（秒）</span><input class="input" id="fallback-budget" type="number" min="30" max="600"></label>
+          <label class="field"><span>单个文件上限（MB）</span><input class="input" id="fallback-max-mb" type="number" min="10" max="1024"></label>
+          <p class="hint">保存到下方指定目录，旁边记录实际平台与音频信息。备用进程在下载时启动，空闲后停止。无损编码检测不能证明平台母带未经过有损转码。</p>
+        </div>
+        <div class="card">
           <label class="switch-row"><span>边听边存<div class="sub">完整试听在线歌后自动保存到本地曲库</div></span><input type="checkbox" id="tee-enabled"></label>
           <label class="switch-row"><span>自动下载封面<div class="sub">自动保存到本地的歌曲会顺带把封面一起下回来，直接嵌进音频文件里；飞牛音乐认的就是内嵌封面，这样官方 App 里下载的歌就有图。歌曲保存成功后才会去下封面，不会出现只有封面没有歌的垃圾文件。默认开启。</div></span><input type="checkbox" id="auto-cover"></label>
           <label class="switch-row"><span>自动下载歌词<div class="sub">自动保存到本地的歌曲在完整下载成功后，自动下载同名 .lrc 歌词放到歌曲同一个文件夹，官方 App 扫描入库后播放就能显示歌词。歌曲下载成功后才会去下歌词，不会出现只有歌词没有歌的垃圾文件。酷我源的歌词接口已失效，暂无歌词。默认关闭。</div></span><input type="checkbox" id="lyric-auto-dl"></label>
