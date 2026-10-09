@@ -45,6 +45,9 @@ jobs:
             bash -n "$script"
           done < <(git ls-files -z '*.sh')
 
+      - name: Validate source provenance and skill data
+        run: python scripts/verify_provenance.py
+
       - name: Python compile check
         run: >
           python -m py_compile proxy/app.py proxy/recommend.py proxy/env_merge.py proxy/version.py
