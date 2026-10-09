@@ -2,7 +2,7 @@
 
 本移植版本在原工程 v2.7.0 上增加网易云发现歌单、私人 FM 和按飞牛用户自己的历史/收藏优化的每日推荐，保留三音源切换和 AI 补充。新增功能与设置见 [推荐使用说明](docs/PERSONALIZATION.md)，后续更新见 [上游同步说明](docs/UPSTREAM.md)。
 
-本地打包：`./packaging/fpk/build.sh`。GitHub Actions 中的 **Build FPK** 可直接生成并下载安装包；**Sync upstream** 用于测试后创建上游同步 PR。
+本地打包：`bash ./packaging/fpk/build.sh`。GitHub Actions 中的 **Build FPK** 可直接生成并下载安装包；**Sync upstream** 用于测试后创建上游同步 PR。
 
 GitHub：https://github.com/Surc/fnos_music_ext
 
@@ -195,7 +195,7 @@ python3 -m pytest        # 全量测试（无需 Docker/飞牛环境）
 ### fpk 打包与发布
 
 ```bash
-./packaging/fpk/build.sh   # 本地打包：组装 + fnpack 校验 → dist/fnmusic-ext-<版本>.fpk
+bash ./packaging/fpk/build.sh   # 本地打包：组装 + fnpack 校验 → dist/fnmusic-ext-<版本>.fpk
 ```
 
 - 版本号唯一来源为根目录 `VERSION`，打包时注入 manifest；

@@ -13,6 +13,8 @@
 歌单封面取曲：第一个带可用封面直链的在线曲目；无在线封面回落第一首带官方
 coverId 的本地曲目（跳过酷我文本页假链接）。
 密钥只从环境变量读取，绝不写入 CONF / 日志 / 缓存。
+启用 FNMUSIC_PERSONALIZATION_ENABLED 时，daily 取消首个用户名额限制，
+增加歌手候选、按个人画像排序并为已配置的 AI 保留补充位置。
 """
 from __future__ import annotations
 
@@ -28,6 +30,11 @@ from typing import Any
 from uuid import uuid4
 
 import httpx
+
+try:
+    from . import personalization
+except ImportError:
+    import personalization
 
 logger = logging.getLogger("fnmusic_proxy.recommend")
 
@@ -280,10 +287,12 @@ def record_online_play(user_guid: str, guid: str, track: dict | None = None) -> 
         return
     now = int(time.time())
     items = load_online_play_history(user_guid)
+    previous = next((it for it in items if it.get("guid") == guid), {})
     items = [it for it in items if it.get("guid") != guid]
     snapshot = dict(track or {})
     snapshot.setdefault("guid", guid)
-    items.append({"guid": guid, "playedAt": now, "track": snapshot})
+    items.append({"guid": guid, "playedAt": now, "track": snapshot,
+                  "playCount": int(previous.get("playCount") or 0) + 1})
     save_online_play_history(user_guid, items)
 
 
@@ -687,6 +696,7 @@ def seeds_from_online_history(user_guid: str) -> list[dict]:
             "genre": genre,
             "language": infer_language(title, artist, album),
             "playedAt": int(it.get("playedAt") or 0),
+            "play_count": int(it.get("playCount") or 1),
             "source": "online",
         })
     return out
@@ -1391,6 +1401,13 @@ def cache_path(user_guid: str, day: str, kind: str = "daily") -> str:
     return os.path.join(recommend_cache_dir(), _safe_user_name(user_guid), f"{kind}-{day}.json")
 
 
+def profile_revision(user_guid: str) -> str:
+    return personalization.fingerprint(
+        user_guid, music_db_path(), play_history_dir(),
+        os.environ.get("FNMUSIC_FAV_DIR") or os.path.join(home_dir(), "online_favorites"),
+    )
+
+
 def load_daily_cache(user_guid: str, day: str, kind: str = "daily") -> dict | None:
     path = cache_path(user_guid, day, kind)
     if not os.path.exists(path):
@@ -1406,6 +1423,8 @@ def load_daily_cache(user_guid: str, day: str, kind: str = "daily") -> dict | No
             return None
         tracks = data.get("tracks")
         if not isinstance(tracks, list) or not tracks:
+            return None
+        if kind == "daily" and personalization.enabled() and not personalization.cache_is_fresh(data, profile_revision(user_guid)):
             return None
         return data
     except Exception as e:
@@ -1638,7 +1657,7 @@ async def get_or_build_daily(
         fav_seeds: list[dict] = []
         exclude_guids, exclude_ta = set(), set()
     else:
-        local_seeds = read_local_recent_tracks(music_db_path(), user_guid, SEED_LIMIT)
+        local_seeds = read_local_recent_tracks(music_db_path(), user_guid, 100 if personalization.enabled() else SEED_LIMIT)
         online_seeds = seeds_from_online_history(user_guid)
         local_favs = read_local_favorite_tracks(music_db_path(), user_guid)
         online_favs = [x for x in (favorite_items or []) if isinstance(x, dict)]
@@ -1663,13 +1682,29 @@ async def get_or_build_daily(
                 "playedAt": int(it.get("createdAt") or it.get("playedAt") or 0),
                 "source": "favorite",
             })
-        play_seeds = merge_recent_seeds(local_seeds, online_seeds, extra_seeds, SEED_LIMIT)
+        play_seeds = merge_recent_seeds(local_seeds, online_seeds, extra_seeds, 100 if personalization.enabled() else SEED_LIMIT)
         exclude_guids, exclude_ta = collect_exclude_sets(play_seeds, fav_seeds, extra_seeds, online_favs, local_favs)
     if existing:
         exclude_guids = exclude_guids | {str(t.get("guid") or "") for t in existing}
         exclude_ta = exclude_ta | {
             identity_key(str(t.get("title") or ""), str(t.get("artist") or "")) for t in existing
         }
+
+    personalized = kind == "daily" and personalization.enabled()
+    profile = personalization.build_profile(play_seeds, fav_seeds) if personalized else {}
+    revision = profile_revision(user_guid) if personalized else ""
+
+    async def from_netease_taste(on_track=None, should_stop=None) -> list[dict]:
+        if not (personalized and recommend_daily and netease_enabled and musicbox_client and profile):
+            return []
+        names = personalization.top_artists(play_seeds, fav_seeds)
+        groups = await asyncio.gather(*[
+            fetch_musicbox_recommend(musicbox_client, "/api/v1/discovery/artist-tracks",
+                                    {"name": name, "limit": 30}) for name in names
+        ])
+        pool = [item for group in groups for item in group]
+        pool = personalization.rank_candidates(pool, profile, 60)
+        return resolve_source_candidates(pool, build_track, 5, exclude_guids, exclude_ta)
 
     async def from_netease_daily(on_track=None, should_stop=None) -> list[dict]:
         # 网易每日推荐每天只有一份内容：仅当天第一个构建的用户可用（占用"音源
@@ -1678,6 +1713,17 @@ async def get_or_build_daily(
         # 用户的排除集过滤空也不再给后来用户重复使用）。
         if not (recommend_daily and netease_enabled and musicbox_client):
             return []
+        if personalized:
+            # All fnOS users may use the same account's official candidates; each
+            # applies only their own exclusions and weighted taste ranking.
+            items = await fetch_musicbox_recommend(
+                musicbox_client, "/api/v1/recommend/songs", {"limit": NETEASE_DAILY_LIMIT}
+            )
+            items = personalization.rank_candidates(items, profile, NETEASE_DAILY_LIMIT)
+            # When explicitly configured, AI supplements native discovery even
+            # if the native source can already fill the entire list.
+            cap = PLAYLIST_SIZE - 4 if llm_http is not None and llm_enabled() else PLAYLIST_SIZE
+            return resolve_source_candidates(items, build_track, max(1, cap - len(tracks)), exclude_guids, exclude_ta)
         if source_slot_claimed(day):
             return []
         async with _SOURCE_SLOT_LOCK:
@@ -1736,8 +1782,10 @@ async def get_or_build_daily(
         if not recommend_daily:
             return []
         rows = read_local_random_tracks(
-            music_db_path(), user_guid, PLAYLIST_SIZE, exclude_guids, exclude_ta
+            music_db_path(), user_guid, 100 if personalized else PLAYLIST_SIZE, exclude_guids, exclude_ta
         )
+        if personalized:
+            rows = personalization.rank_candidates(rows, profile, PLAYLIST_SIZE)
         return [build_local_track(r) for r in rows]
 
     tracks = list(existing)
@@ -1770,6 +1818,7 @@ async def get_or_build_daily(
             "tierFailures": list(tier_failures),
             "seedCount": len(play_seeds),
             "favoriteCount": len(fav_seeds),
+            "profileRevision": revision,
             "builtAt": int(time.time()),
         }
         save_daily_cache(user_guid, day, cp, kind)
@@ -1801,6 +1850,8 @@ async def get_or_build_daily(
             return
         budget = build_budget_s()
         remaining = budget - (time.monotonic() - t0)
+        if name == "netease-taste":
+            remaining = min(remaining, 10.0)
         if remaining <= 0:
             tier_failures.append(f"{name}:no-budget")
             logger.warning("daily recommend tier %s skipped: no budget left (budget=%.1fs)", name, budget)
@@ -1865,7 +1916,9 @@ async def get_or_build_daily(
         await run_tier("netease-charts", from_netease_charts)
         await run_tier("lx-charts", from_lx_charts)
     elif recommend_daily:
-        if not source_slot_claimed(day):
+        if personalized:
+            await run_tier("netease-taste", from_netease_taste)
+        if personalized or not source_slot_claimed(day):
             await run_tier("netease-daily", from_netease_daily)
         await run_tier("llm", from_llm)
         if len(tracks) < PLAYLIST_SIZE:
@@ -1903,6 +1956,7 @@ async def get_or_build_daily(
         "tierFailures": list(tier_failures),
         "seedCount": len(play_seeds),
         "favoriteCount": len(fav_seeds),
+        "profileRevision": revision,
         "builtAt": int(time.time()),
     }
     if tracks:

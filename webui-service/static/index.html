@@ -149,6 +149,25 @@
           <div class="card-title">推荐</div>
           <label class="switch-row"><span>热门榜单推荐<div class="sub">独立「热门推荐」歌单：热歌榜/飙升榜原味</div></span><input type="checkbox" id="recommend-hot"></label>
           <label class="switch-row"><span>每日推荐<div class="sub">独立「每日推荐」歌单；其他音源在配置大模型后生效</div></span><input type="checkbox" id="recommend-daily"></label>
+          <label class="switch-row"><span>结合我的飞牛历史和收藏<div class="sub">按自己的听歌偏好排序并保留新歌探索。画像变化后最多每半小时更新一次，六小时重新推荐。开启后每个飞牛用户都能使用网易云日推候选。</div></span><input type="checkbox" id="personalization-enabled"></label>
+        </div>
+        <div class="card">
+          <div class="card-title">网易云发现</div>
+          <label class="switch-row"><span>显示发现歌单<div class="sub">需要启用网易云音源；推荐、账号歌单与私人 FM 需要扫码登录。网易云内容使用 NAS 上登录的账号。</div></span><input type="checkbox" id="discovery-enabled"></label>
+          <div id="discovery-channels">
+            <label><input type="checkbox" value="mine"> 我的及收藏歌单</label>
+            <label><input type="checkbox" value="nrec"> 为你推荐歌单</label>
+            <label><input type="checkbox" value="toplist"> 排行榜</label>
+            <label><input type="checkbox" value="category"> 分类歌单</label>
+            <label><input type="checkbox" value="newalbum"> 新碟上架</label>
+            <label><input type="checkbox" value="fm"> 私人 FM</label>
+          </div>
+          <label class="field"><span>分类名称（例如华语、怀旧、流行）</span><input class="input" id="discovery-category" maxlength="80"></label>
+          <label class="field"><span>每类显示的歌单数量</span><input class="input" id="discovery-limit" type="number" min="1" max="50"></label>
+          <label class="field"><span>每天预热歌单的时间（NAS 本地时间，留空关闭）</span><input class="input" id="discovery-refresh" type="time"></label>
+          <div class="card-title">歌单分类顺序</div>
+          <div id="discovery-order"></div>
+          <p class="hint">用上移、下移调整显示顺序。歌单只读；曲目会按账号可播放权限过滤。私人 FM 每五分钟刷新候选。</p>
         </div>
       </section>
 
