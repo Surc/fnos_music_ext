@@ -43,6 +43,10 @@ GitHub 验证前，在同一受限执行环境对原工程固定提交 `f036e1f`
 
 分支 `feat/download-fallback`，基于 main `6a0a30d18c7828f59c068f2aa8411b098c153185` 独立实现；双来源采用 SHA 和维护 skill 1.0.0 未变。[PR #3](https://github.com/Surc/fnos_music_ext/pull/3) 的最终运行代码提交为 `8550ecd63dbd40b197ce2d741591916111971a04`，[完整 CI](https://github.com/Surc/fnos_music_ext/actions/runs/37921652490) 11 项全部成功；合并提交 `981c6b19b0a27a7bb24020c3a0a01b0cce691570` 的 [main CI](https://github.com/Surc/fnos_music_ext/actions/runs/37922716170) 同样全部通过。发行仅调整说明与记录，运行代码保持相同。
 
+正式 [v2.8.0](https://github.com/Surc/fnos_music_ext/releases/tag/v2.8.0) 固定在 `3e9c6cdb4f8e90416457dde9a3dc3984831b023b`；该提交的 [CI](https://github.com/Surc/fnos_music_ext/actions/runs/37943422317) 11 项全部成功，Python 3.11 / 3.13 各 857 passed，无失败或跳过。[Release 工作流](https://github.com/Surc/fnos_music_ext/actions/runs/37944046519) 打包测试 67 passed，fnpack 1.2.3 构建及 GitHub Release 上传成功。
+
+正式附件 `fnmusic-ext-2.8.0.fpk` 为 27,117,969 字节，GitHub Release API / 页面公布的 SHA256 为 `22a3bc847d2cb8e929cf9d1832dfd7325e143e0ba800e01b8ce528dbb798790e`；配套校验文件 88 字节，其自身 SHA256 为 `59a0114a4961c86cb8374b91f7b4c6f2011e33e3eaca2506ce6b43a52ab5620b`。同提交的 CI 实际检查了 FPK 骨架、新补源模块与 SHA256 文件，打包测试验证私有数据排除。当前执行环境未能重新下载正式附件，因此正式资产摘要依据 Release API / 页面，包内证据依据同提交 CI 与打包测试；不以 CI 或本地另一构建的摘要替代正式资产。发行后 main 记录这些结果，固定 tag 保持不变。
+
 | 检查 | 当前实际结果 |
 | --- | --- |
 | 相关代理 / 下载 / 管理页 / 容器 / musicdl 测试 | 集成回归 197 passed、1 skipped；随后 musicdl 排序及部分结果同步专项 72 passed，最终缓存升级 / tee / 转码专项 87 passed、1 skipped（本地 Socket 权限） |

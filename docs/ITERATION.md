@@ -15,13 +15,15 @@
 
 ## 已发布与继续开发
 
-- VERSION `2.8.0`；本次发行目标 [v2.8.0](https://github.com/Surc/fnos_music_ext/releases/tag/v2.8.0)，正式附件及固定 tag 摘要在发行完成后记录到 SOURCE_VERSIONS.json。
+- VERSION `2.8.0`；最新正式发行 [v2.8.0](https://github.com/Surc/fnos_music_ext/releases/tag/v2.8.0)，于 2026-10-09 22:25:18（Asia/Shanghai）发布，tag 固定在 `3e9c6cdb4f8e90416457dde9a3dc3984831b023b`。正式附件及固定 tag 摘要已登记在 SOURCE_VERSIONS.json。
+- v2.8.0 正式 FPK 为 `fnmusic-ext-2.8.0.fpk`，27,117,969 字节，SHA256：`22a3bc847d2cb8e929cf9d1832dfd7325e143e0ba800e01b8ce528dbb798790e`；配套 `.sha256` 为 88 字节。以 Release 工作流附件为准，同提交的 CI 构建包字节可能不同。
+- 发行提交的 [CI](https://github.com/Surc/fnos_music_ext/actions/runs/37943422317) 11 项全部成功，Python 3.11 / 3.13 各 857 passed；[Release 工作流](https://github.com/Surc/fnos_music_ext/actions/runs/37944046519) 成功，打包测试 67 passed，正式 FPK 和校验文件已上传。
 - v2.8.0 功能合并：[PR #3](https://github.com/Surc/fnos_music_ext/pull/3)，合并提交 `981c6b19b0a27a7bb24020c3a0a01b0cce691570`；[main CI](https://github.com/Surc/fnos_music_ext/actions/runs/37922716170) 11 项全部成功，Python 两版本各 857 passed。
 - v2.7.1 功能合并：[PR #1](https://github.com/Surc/fnos_music_ext/pull/1)，合并提交 `0d5d2451d7acfa8f0162b89d628083d33f59c161`。
 - 历史正式发行：[v2.7.1](https://github.com/Surc/fnos_music_ext/releases/tag/v2.7.1)，tag 固定在 `72df1bb053f9769ea13389fc7fffbe903f80541a`，含已更新的集成版文档。
 - v2.7.1 正式 FPK 的 SHA256：`33dc5dc28c714f016ae1c403519075ad727425fe9f543ce4ecb1675681506bd6`。以 Release 附件及其配套校验文件为准；不同构建的包字节可能不同。
-- 本次追加来源与维护资料进入后续 main，现有发布快照可从 tag 独立复现。通过 [验证记录](VALIDATION.md) 查看功能 PR 的 11 项 CI 与两版本 Python 各 807 passed 的证据。
-- 发布提交的 [CI](https://github.com/Surc/fnos_music_ext/actions/runs/37907664958) 与 [Release 工作流](https://github.com/Surc/fnos_music_ext/actions/runs/37908174138) 均成功。fnOS 实机安装、升级和真实账号在线播放仍待验收。
+- 发行后的 main 追加完整资产摘要与交接资料；保留 v2.7.1、v2.8.0 的固定 tag 和来源采用历史。通过 [验证记录](VALIDATION.md) 区分 v2.7.1 的两版本各 807 passed 与 v2.8.0 的各 857 passed。
+- v2.7.1 发布提交的 [CI](https://github.com/Surc/fnos_music_ext/actions/runs/37907664958) 与 [Release 工作流](https://github.com/Surc/fnos_music_ext/actions/runs/37908174138) 均成功。两个发行版的 fnOS 实机安装、升级及真实账号行为仍待验收。
 
 ## Skill 信息与可复用数据
 
@@ -51,7 +53,7 @@
 
 ## 本次独立实现：网易云下载的跨平台补源
 
-状态：`implemented`。功能见 [PR #3](https://github.com/Surc/fnos_music_ext/pull/3)，实现分支 `feat/download-fallback`；已验证代码提交 `8550ecd63dbd40b197ce2d741591916111971a04` 的 [完整 CI](https://github.com/Surc/fnos_music_ext/actions/runs/37921652490) 11 项全部成功，Python 3.11 / 3.13 各 857 passed，包含真实容器契约与 FPK 构建校验。本次随 v2.8.0 发行，正式 tag 与资产摘要在发行完成后登记；真实账号与 NAS 验收待完成。用户目标为：网易云因账号权益不可下载，或只有低于目标音质的资源时，自动尝试其他平台的同一首歌。
+状态：`released`，已包含在 [v2.8.0](https://github.com/Surc/fnos_music_ext/releases/tag/v2.8.0)。功能见 [PR #3](https://github.com/Surc/fnos_music_ext/pull/3)，实现分支 `feat/download-fallback`；已验证代码提交 `8550ecd63dbd40b197ce2d741591916111971a04` 的 [完整 CI](https://github.com/Surc/fnos_music_ext/actions/runs/37921652490) 11 项全部成功，Python 3.11 / 3.13 各 857 passed，包含真实容器契约与 FPK 构建校验。正式 tag、发行提交与资产摘要已登记；真实账号与 NAS 验收待完成。用户目标为：网易云因账号权益不可下载，或只有低于目标音质的资源时，自动尝试其他平台的同一首歌。
 
 ### v2.7.1 的已有行为
 
