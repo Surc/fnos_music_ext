@@ -15,6 +15,23 @@
 - 新增手动 Build FPK 和上游同步 PR 工作流；升级备份包含历史、收藏、歌单附加数据及推荐缓存。
 - 新增端到端测试覆盖发现路由、用户隔离、账号切换、只读歌单、分页、缓存恢复、画像及 AI 补充。NAS 实机安装和真实网易云播放尚未验收。
 
+### 安装与启用
+
+1. 下载附件 `fnmusic-ext-2.7.1.fpk` 和 `.sha256`，在 fnOS「应用中心 → 手动安装」选择 FPK。需要先安装并启动飞牛音乐和 Docker。
+2. 选择网易云 musicbox，在飞牛管理员的「fnMusic 扩展管理 → 音乐源」扫码登录。
+3. 在「播放与推荐」开启「每日推荐」「结合我的飞牛历史和收藏」「显示发现歌单」，勾选六类内容，调整分类顺序后「保存并生效」。
+4. 回到飞牛音乐刷新歌单。已有原版 FPK 可在应用中心升级；原有配置、登录态、历史与收藏由升级流程备份和恢复。
+
+每日推荐按当前飞牛用户的历史和收藏处理；网易云推荐歌单和 FM 使用 NAS 上共享的网易账号。未实现每个飞牛用户分别绑定网易账号，发现歌单只读，不向网易云回写听歌记录。
+
+### 文档与验证
+
+- 首页已按集成版重写，补齐发现 / 画像、参数、升级、在线打包与上游同步说明；安装指南指向 Surc 仓库。
+- 功能 PR 和合并后的 main CI 均通过全部 11 项检查，Python 3.11 / 3.13 各 807 个测试通过，Docker 构建、真实生产依赖合约、Shellcheck 和 FPK 验证通过。
+- 操作指南：[README](https://github.com/Surc/fnos_music_ext#readme)、[新功能使用](https://github.com/Surc/fnos_music_ext/blob/main/docs/PERSONALIZATION.md)、[安装升级](https://github.com/Surc/fnos_music_ext/blob/main/docs/INSTALL.md)、[上游同步](https://github.com/Surc/fnos_music_ext/blob/main/docs/UPSTREAM.md)、[验证范围](https://github.com/Surc/fnos_music_ext/blob/main/docs/VALIDATION.md)。
+- 完整历史源码备份包含 Git bundle 与恢复步骤；GitHub 自动生成的 Source code ZIP / tar.gz 仅包含 tag 源码。
+- fnOS 实机安装、升级、卸载和真实账号在线播放尚未验收。
+
 ## [Unreleased]
 
 ## [2.7.0] - 2026-10-09
