@@ -143,7 +143,7 @@ COPY --chown=appuser:appuser lxmusic-service/app.py lxmusic-service/lxserver_cli
 COPY --chown=appuser:appuser webui-service/app.py /srv/webui-service/
 COPY --chown=appuser:appuser webui-service/static/ /srv/webui-service/static/
 # webui 复用 .env 安全合并（sys.path 上加 /srv 后 import proxy.env_merge），必须随镜像分发
-COPY --chown=appuser:appuser proxy/__init__.py proxy/env_merge.py /srv/proxy/
+COPY --chown=appuser:appuser proxy/__init__.py proxy/env_merge.py proxy/fallback_control.py /srv/proxy/
 RUN find /srv -name "*.py" -exec chmod 0644 {} + \
     && mkdir -p /repo \
     && chmod 0755 /repo /data
@@ -156,7 +156,7 @@ RUN chmod 0755 /usr/local/bin/env_flag.sh /usr/local/bin/entrypoint.sh /usr/loca
     && chmod 0644 /etc/supervisor/supervisord.conf
 
 USER appuser
-EXPOSE 8001 8002 8003 8004
+EXPOSE 8001 8002 8003 8004 8006
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=20s --retries=3 \
     CMD ["/usr/local/bin/healthcheck.sh"]

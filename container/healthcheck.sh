@@ -24,6 +24,11 @@ check() {
 
 check musicdl FNMUSIC_MUSICDL_ENABLED
 check musicbox FNMUSIC_NETEASE_ENABLED
+if [ "$(env_flag FNMUSIC_NETEASE_ENABLED)" = "true" ] && \
+   [ "$(env_flag FNMUSIC_MUSICDL_ENABLED)" != "true" ] && \
+   [ "$(env_flag FNMUSIC_LX_ENABLED)" != "true" ]; then
+    check fallback-control FNMUSIC_DOWNLOAD_FALLBACK_ENABLED
+fi
 if [ "$(env_flag FNMUSIC_LX_ENABLED)" = "true" ]; then
     checked=$((checked + 1))
     if ! running lxserver; then

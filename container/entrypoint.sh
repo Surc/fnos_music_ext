@@ -85,6 +85,9 @@ if [ "$(env_flag FNMUSIC_MUSICDL_ENABLED)" = "true" ]; then
     start_prog musicdl
 elif [ "$(env_flag FNMUSIC_NETEASE_ENABLED)" = "true" ]; then
     start_prog musicbox
+    if [ "$(env_flag FNMUSIC_DOWNLOAD_FALLBACK_ENABLED)" = "true" ]; then
+        start_prog fallback-control
+    fi
 elif [ "$(env_flag FNMUSIC_LX_ENABLED)" = "true" ]; then
     start_prog lxserver
     start_prog lxmusic
