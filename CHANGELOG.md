@@ -3,7 +3,7 @@
 本项目所有显著变更均记录于此文件。
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循语义化版本。
 
-## [2.8.0] - Unreleased
+## [2.8.0] - 2026-10-09
 
 ### 网易云下载跨平台补源
 
@@ -12,12 +12,24 @@
 - 严格核对歌名、完整歌手集合、版本标记、已知时长和实际文件时长；排除错版、翻唱、Live、伴奏、试听与声明的有损转无损，整文件经 ffprobe 检测和 ffmpeg 解码才提交。无损编码不代表可证明平台母带未经过有损转码。
 - 音频旁保存 `.fnmusic-source.json`，记录原始 GUID、实际平台 / 曲目 ID、编码、音质和触发原因，不保存直链、Cookie 或用户听歌数据。
 - 私有 Unix Socket 租约启动备用进程，空闲后停止；按曲目去重、限制两个并发、八个排队任务、失败冷却，配置变化和停止时清理。三主音源互斥、非 root 容器及用户收藏权限保持原契约。
-- 下载引用记录实际扩展名，升级得到的 FLAC 优先于旧 MP3；旧文件保留，避免删除已有曲库内容。流式播放与 Range 续传仍沿原来源完成，再独立检查落库音质。
+- 下载引用记录实际扩展名，升级得到的 FLAC 优先于旧 MP3；不同格式的旧文件保留，同路径同格式升级使用原子替换，失败不会删除已有曲库内容。流式播放与 Range 续传仍沿原来源完成，再独立检查落库音质。
 - 修复 musicdl 并行探活过早收够候选的问题：确认库序前段后再截取，部分结果与最终结果使用相同排序，避免后面的快速结果挤掉前面的有效歌曲。
 - 已有低音质缓存时重新检查网易当前可下载资源；升级使用校验后的真实扩展名和完整路径引用，防止 FLAC 覆盖旧 MP3 文件名。补源失败保留旧文件，允许降级时不会用更差的新资源替换较好的缓存。
 - 首版支持可取得完整元数据的网易曲目，不改变搜索 / 发现的账号权限过滤。其他平台必须存在可获取的完整同版音频，未找到时严格模式失败，允许降级时仅交付验证合格的较低音质。
 
-使用与边界见 [下载补源说明](docs/DOWNLOAD_FALLBACK.md)。自动测试、容器生产合约及 FPK 结果见 [验证记录](docs/VALIDATION.md)；fnOS 实机与真实账号下载尚待验收。本段为下一版候选，现有正式 Release 仍是 v2.7.1。
+### 安装与启用
+
+1. 下载本发行版附件 `fnmusic-ext-2.8.0.fpk` 和 `.sha256`，在 fnOS「应用中心 → 手动安装」安装或升级。需要先安装并启动飞牛音乐和 Docker；升级流程备份并恢复配置、网易登录、历史与收藏。
+2. 管理页「音乐源」选择网易云 musicbox，按需要扫码登录。
+3. 在「边听边存」开启「网易下载跨平台补源」（默认关闭），选择备用平台顺序、无损编码 / 320 kbps 目标和是否允许降级；设置原有「保存路径」，点「保存并生效」。需要保留 FLAC 时在 App 选择「原始」下载。
+4. 下载补源使用与原有保存功能相同的 NAS 目录，文件旁记录实际平台和音频信息。网易发现歌单和各飞牛用户的本地画像继续保留。
+
+### 文档与验证
+
+- 功能 [PR #3](https://github.com/Surc/fnos_music_ext/pull/3) 及合并后的 [main CI](https://github.com/Surc/fnos_music_ext/actions/runs/37922716170) 11 项检查全部成功，Python 3.11 / 3.13 各 857 passed；六组真实生产依赖合约、三原音源非 root 合约、按需补源生命周期、Docker 及 FPK 验证通过。
+- 采用基线仍为 javycoder v2.7.0（`f036e1f`）和 gzywd v2.9.30（`08b0b23`），维护 skill 1.0.0 保持一致；本次补源为独立实现，完整来源与发行摘要记录在后续 main 的 SOURCE_VERSIONS.json。
+- [安装升级](https://github.com/Surc/fnos_music_ext/blob/v2.8.0/docs/INSTALL.md) · [下载补源说明](https://github.com/Surc/fnos_music_ext/blob/v2.8.0/docs/DOWNLOAD_FALLBACK.md) · [发现与本地画像](https://github.com/Surc/fnos_music_ext/blob/v2.8.0/docs/PERSONALIZATION.md) · [验证记录](https://github.com/Surc/fnos_music_ext/blob/v2.8.0/docs/VALIDATION.md) · [持续迭代](https://github.com/Surc/fnos_music_ext/blob/main/docs/ITERATION.md)。
+- fnOS 实机安装、升级、真实账号、App 下载和官方曲库扫描 / 绑定尚未验收。首版仅处理可取得完整元数据的已知曲目；被网易列表提前过滤的 VIP 曲目不会自动出现，备用平台是否有完整同版资源取决于实际可用性。
 
 ## [2.7.1] - 2026-10-09
 

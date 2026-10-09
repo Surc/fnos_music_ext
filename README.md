@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/Surc/fnos_music_ext/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Surc/fnos_music_ext/actions/workflows/ci.yml)
 
-本仓库由 **Surc** 维护，基于 `javycoder/fnos_music_ext` v2.7.0，开发版本 **v2.8.0**，正式 Release 仍为 **v2.7.1**。在原工程的三音源切换、在线搜播、歌词封面、边听边存和 AI 推荐基础上，加入 **网易云发现歌单、私人 FM、按飞牛用户自己历史与收藏优化的每日推荐**；v2.8.0 候选新增可配置的 **网易云下载跨平台补源**。保留原工程完整 Git 历史，方便持续同步上游。
+本仓库由 **Surc** 维护，基于 `javycoder/fnos_music_ext` v2.7.0，发行版本 **v2.8.0**。在原工程的三音源切换、在线搜播、歌词封面、边听边存和 AI 推荐基础上，加入 **网易云发现歌单、私人 FM、按飞牛用户自己历史与收藏优化的每日推荐**；v2.8.0 新增可配置的 **网易云下载跨平台补源**。保留原工程完整 Git 历史，方便持续同步上游。
 
 代理在宿主机接管飞牛音乐 Unix Socket，音源与管理页运行在一个 Docker 容器。飞牛官方程序、nginx 配置与数据库保持原样，本地画像只读官方数据库；停止扩展可恢复官方直连。
 
@@ -31,7 +31,7 @@
 | 飞牛本地画像 | 当前飞牛用户的播放次数、近期历史和收藏用于每日推荐 | 开启「结合我的飞牛历史和收藏」 |
 | 顺序与缓存 | 中文上移 / 下移、过期后台刷新、每日缓存预热 | 管理页「播放与推荐」 |
 | 持续迭代与打包 | 上游同步脚本、同步 PR 工作流、FPK 在线打包 | Git / GitHub Actions |
-| 下载跨平台补源（v2.8.0 候选） | 网易整轨不可用或音质不足时，严格匹配其他平台的完整同版音频，记录实际来源 | 网易主音源 + 管理页「边听边存」显式开启；v2.7.1 不含 |
+| 下载跨平台补源（v2.8.0） | 网易整轨不可用或音质不足时，严格匹配其他平台的完整同版音频，记录实际来源 | 网易主音源 + 管理页「边听边存」显式开启；v2.7.1 不含 |
 
 **个性化范围：** 飞牛「每日推荐」按每个飞牛用户自己的记录处理；「为你推荐歌单」「私人 FM」由 NAS 上当前登录的同一个网易云账号提供。家庭成员的飞牛画像、收藏独立，但网易云账号仍共享，本版没有实现每个飞牛用户分别绑定网易云账号。
 
@@ -51,7 +51,7 @@
 
 前提：fnOS 已安装并启动官方「飞牛音乐」，应用中心已安装 Docker，并使用飞牛管理员操作。
 
-1. 从 [本仓库 Releases](https://github.com/Surc/fnos_music_ext/releases) 下载 `fnmusic-ext-2.7.1.fpk` 与对应 `.sha256`，在「应用中心 → 手动安装」选择 FPK。
+1. 从 [本仓库 Releases](https://github.com/Surc/fnos_music_ext/releases) 下载 `fnmusic-ext-2.8.0.fpk` 与对应 `.sha256`，在「应用中心 → 手动安装」选择 FPK。
 2. 初始音源选择 **网易云 musicbox**，安装后打开桌面「**fnMusic 扩展管理**」（`/app/fnmusic-ext`）。
 3. 在「**音乐源**」完成网易云扫码登录。
 4. 在「**播放与推荐**」开启「**每日推荐**」「**结合我的飞牛历史和收藏**」。
@@ -64,7 +64,7 @@
 
 已有原版 FPK 时，在应用中心安装本版作为同应用升级；应用 ID 仍为 `fnmusic-ext`，升级流程备份并恢复配置、登录态、收藏与历史。脚本部署迁移、部署冲突处理见 [INSTALL.md](docs/INSTALL.md)。
 
-v2.8.0 的下载补源在「边听边存」开启，选择备用平台顺序、目标编码与是否允许降级；保存目录仍由该页「保存路径」决定。文件旁记录实际平台 / 曲目 ID 和音频信息。严格模式未找到完整同版资源就失败；无损编码检测不能证明母带未经过有损转码。当前候选版本及实际测试状态见 [补源说明](docs/DOWNLOAD_FALLBACK.md) 和 [迭代记录](docs/ITERATION.md)。
+v2.8.0 的下载补源在「边听边存」开启，选择备用平台顺序、目标编码与是否允许降级；保存目录仍由该页「保存路径」决定。文件旁记录实际平台 / 曲目 ID 和音频信息。严格模式未找到完整同版资源就失败；无损编码检测不能证明母带未经过有损转码。使用方法及实际测试状态见 [补源说明](docs/DOWNLOAD_FALLBACK.md) 和 [迭代记录](docs/ITERATION.md)。
 
 ### 脚本安装
 
@@ -136,7 +136,7 @@ curl -s --unix-socket /var/run/trim_music.socket http://localhost/_ext/healthz
 
 新增模块为 `musicbox-service/discovery.py`（网易云 API）、`proxy/discovery.py`（歌单与缓存）、`proxy/personalization.py`（用户画像），由原有代理、推荐和管理页接入。固定上游提交与维护边界见 [UPSTREAM.md](docs/UPSTREAM.md)。
 
-v2.7.1 的 GitHub CI 历史结果为两版本各 **807 个测试**。v2.8.0 补源功能的 [PR #3](https://github.com/Surc/fnos_music_ext/pull/3) 已通过 [11 项 CI](https://github.com/Surc/fnos_music_ext/actions/runs/37921652490)：Python 3.11 / 3.13 各 **857 passed**、六组生产依赖合约、真实非 root 容器补源生命周期、Docker 及 FPK 构建校验。此版本尚未发布，CI 的 **fnmusic-ext-fpk** 产物可供测试；v2.7.1 Release 不含补源功能。各版本证据见 [VALIDATION.md](docs/VALIDATION.md)。**fnOS 实机安装、升级与真实账号下载播放尚未验收。**
+v2.7.1 的 GitHub CI 历史结果为两版本各 **807 个测试**。v2.8.0 补源功能的 [PR #3](https://github.com/Surc/fnos_music_ext/pull/3) 已通过 [11 项 CI](https://github.com/Surc/fnos_music_ext/actions/runs/37921652490)：Python 3.11 / 3.13 各 **857 passed**、六组生产依赖合约、真实非 root 容器补源生命周期、Docker 及 FPK 构建校验。v2.8.0 的正式 FPK 与校验文件从 [Release](https://github.com/Surc/fnos_music_ext/releases/tag/v2.8.0) 下载；v2.7.1 Release 不含补源功能。各版本证据见 [VALIDATION.md](docs/VALIDATION.md)。**fnOS 实机安装、升级与真实账号下载播放尚未验收。**
 
 ```bash
 python3 -m pytest

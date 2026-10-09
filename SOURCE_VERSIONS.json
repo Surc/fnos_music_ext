@@ -102,6 +102,23 @@
       ],
       "reference_scope": "selected_semantic_port",
       "notes": "Per-fnOS-user local profile ranking added in this integration; NetEase account remains shared at NAS level."
+    },
+    {
+      "recorded_on": "2026-10-09",
+      "project_version": "2.8.0",
+      "merge_commit": "981c6b19b0a27a7bb24020c3a0a01b0cce691570",
+      "pull_request": "https://github.com/Surc/fnos_music_ext/pull/3",
+      "sources": {
+        "upstream": "f036e1f7082363c5f5e4892d15209ce584b0769b",
+        "reference": "08b0b23486d289619ab73575f42aa0d20e78c2b3"
+      },
+      "implemented_modules": [
+        "proxy/download_fallback.py",
+        "proxy/fallback_control.py",
+        "tests/integration/download_fallback_contract.py"
+      ],
+      "reference_scope": "independent_implementation_using_existing_musicdl_api",
+      "notes": "Download-only fallback with strict identity and full audio validation, on-demand non-root auxiliary lifecycle, original primary selection and per-fnOS-user binding preserved; no source baseline advanced."
     }
   ],
   "releases": [
@@ -242,9 +259,17 @@
         },
         "nas_acceptance": "pending",
         "code_commit": "8550ecd63dbd40b197ce2d741591916111971a04",
-        "pull_request": "https://github.com/Surc/fnos_music_ext/pull/3"
+        "pull_request": "https://github.com/Surc/fnos_music_ext/pull/3",
+        "merge_commit": "981c6b19b0a27a7bb24020c3a0a01b0cce691570",
+        "main_ci": {
+          "url": "https://github.com/Surc/fnos_music_ext/actions/runs/37922716170",
+          "conclusion": "success",
+          "pytest_passed_per_version": 857,
+          "checks_passed": 11
+        }
       },
-      "implemented_on": "2026-10-09"
+      "implemented_on": "2026-10-09",
+      "release_target": "v2.8.0"
     }
   ]
 }
