@@ -526,7 +526,7 @@ def test_default_budget_limit30_keeps_healthy_results(clean_state, monkeypatch):
     entries = app_module._search_playable("KuwoMusicClient", "budget", 60, 30,
                                         deadline=time.monotonic() + 11.9, progress=progress)
     assert len(entries) == 30
-    # 交付顺序允许乱序（按探活完成顺序），但集合与返回值一致
+    # 交付快探活的临时结果后仍按库序收敛，集合与返回值一致
     handed = progress.finish()
     assert len(handed) == 30
     assert {item["id"] for item, _, _ in handed} == {entry[0]["id"] for entry in entries}
@@ -831,6 +831,8 @@ def test_earlier_slow_valid_probe_is_not_displaced_by_later_results(clean_state,
         time.sleep(0.15 if song_id == 2 else 0.005)
         return song_id % 2 == 0
     monkeypatch.setattr(app_module, "_probe_playable_sync", probe)
+    progress = app_module.SearchProgress(2, time.monotonic() + 2)
     entries = app_module._search_playable("KuwoMusicClient", "k", 8, 2,
-                                          deadline=time.monotonic() + 2)
+                                          deadline=time.monotonic() + 2, progress=progress)
     assert [entry[0]["id"] for entry in entries] == ["kuwo:2", "kuwo:4"]
+    assert progress.finish() == entries

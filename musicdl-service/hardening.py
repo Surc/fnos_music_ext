@@ -16,12 +16,17 @@ class SourceBusy(RuntimeError):
 
 
 class SearchProgress:
-    """Bounded per-request handoff, never a cache; close rejects late results."""
+    """Bounded per-request handoff; ranked probes retain library order.
+
+    A fast later probe can be provisional until an earlier candidate confirms.
+    Closing freezes the snapshot and rejects late results, without touching cache.
+    """
 
     def __init__(self, limit, deadline):
         self.limit = limit
         self.deadline = deadline
         self._entries = []
+        self._ranked = {}
         self.partial = False
         self._closed = False
         self._lock = threading.Lock()
@@ -30,9 +35,15 @@ class SearchProgress:
         with self._lock:
             return self._closed or time.monotonic() >= self.deadline
 
-    def append(self, entry):
+    def append(self, entry, *, rank=None):
         with self._lock:
-            if not self._closed and time.monotonic() < self.deadline and len(self._entries) < self.limit:
+            if self._closed or time.monotonic() >= self.deadline:
+                return
+            if rank is not None:
+                self._ranked[rank] = entry
+                self._ranked = dict(sorted(self._ranked.items())[:self.limit])
+                self._entries = list(self._ranked.values())
+            elif len(self._entries) < self.limit:
                 self._entries.append(entry)
 
     def finish(self):

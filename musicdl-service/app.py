@@ -332,9 +332,9 @@ def _search_playable(source: str, keyword: str, fetch_size: int, limit: int,
     """Keep search and bounded probes inside the same source admission slot.
 
     Return metadata only; a timed-out worker must not update shared caches.
-    Probes fan out on the shared pool; each confirmed entry is handed to
-    `progress` immediately (same handoff timing as the old serial loop), and
-    the return value keeps library order.
+    Probes fan out on the shared pool; confirmed entries are handed to
+    `progress` immediately with library rank. Both the bounded snapshot and
+    the return value select the same earliest confirmed candidates.
     """
     songs = _search_one_source(source, keyword, fetch_size)
     candidates = []
@@ -370,7 +370,7 @@ def _search_playable(source: str, keyword: str, fetch_size: int, limit: int,
             if fut.result():
                 valid.add(idx)
                 if progress is not None:
-                    progress.append(candidates[idx])
+                    progress.append(candidates[idx], rank=idx)
             if len(valid) >= limit:
                 # A later fast probe must not displace an earlier valid song.
                 # Stop once every candidate up to the nth valid result is known.
