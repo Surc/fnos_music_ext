@@ -48,9 +48,9 @@
 
 完整命令与冲突规则见 [UPSTREAM.md](UPSTREAM.md)。`--check-git` 需要完整 Git 历史与 reference 基线对象；执行 `git fetch origin --tags`、`git fetch upstream main`、`git fetch reference main` 后使用。
 
-## 本次独立实现候选：网易云下载的跨平台补源
+## 本次独立实现：网易云下载的跨平台补源
 
-状态：`planned`（已写入 v2.8.0 候选分支，完整 CI 与容器契约尚待验证），尚未进入任何 Release。用户目标为：网易云因账号权益不可下载，或只有低于目标音质的资源时，自动尝试其他平台的同一首歌。
+状态：`implemented`。功能见 [PR #3](https://github.com/Surc/fnos_music_ext/pull/3)，实现分支 `feat/download-fallback`；已验证代码提交 `8550ecd63dbd40b197ce2d741591916111971a04` 的 [完整 CI](https://github.com/Surc/fnos_music_ext/actions/runs/37921652490) 11 项全部成功，Python 3.11 / 3.13 各 857 passed，包含真实容器契约与 FPK 构建校验。当前为 v2.8.0 开发候选，尚未进入任何 Release；真实账号与 NAS 验收待完成。用户目标为：网易云因账号权益不可下载，或只有低于目标音质的资源时，自动尝试其他平台的同一首歌。
 
 ### v2.7.1 的已有行为
 
@@ -63,11 +63,11 @@
 ### v2.8.0 候选实现
 
 - `proxy/download_fallback.py`：配置、严格同曲匹配、全文件下载、实际编码 / 时长 / 解码验证、策略和来源伴随文件。
-- `proxy/app.py`：手动下载及后台整轨保存接入；按 GUID 去重、限流、失败冷却及配置变化取消；完整路径引用避免旧 MP3 遮住升级后的 FLAC。用户官方绑定仍使用各自请求凭证。
+- `proxy/app.py`：手动下载及后台整轨保存接入；按 GUID 去重、限流、失败冷却及配置变化取消；低档缓存不阻止重新检查网易权益，真实扩展名及完整路径引用避免旧 MP3 遮住升级后的 FLAC。用户官方绑定仍使用各自请求凭证。
 - `proxy/fallback_control.py`：现有非 root 容器内的私有 Socket 租约控制；独立 `musicdl-fallback` 进程按需启停，平台配置变化失效旧租约，停止 / 重启清理。
 - 容器、主机端口映射、管理页六个配置键、默认关闭和 FPK 模块已接入。使用与保存目录见 [DOWNLOAD_FALLBACK.md](DOWNLOAD_FALLBACK.md)。
 
-首版不改变网易列表的权限过滤，只处理有完整元数据的已知曲目；不混接流式 / Range 字节。音质判断描述真实文件编码，不能证明平台母带未经过有损转码。现有低档文件保留，严格模式不将其作为下载成功返回；App 标准档仍可能对源文件转成 MP3。
+首版不改变网易列表的权限过滤，只处理有完整元数据的已知曲目；不混接流式 / Range 字节。音质判断描述真实文件编码，不能证明平台母带未经过有损转码。失败时保留现有低档文件，严格模式不将其作为下载成功返回；App 标准档仍可能对源文件转成 MP3。
 
 ### 目标行为与实现边界
 
@@ -83,4 +83,4 @@
 
 覆盖无 URL、低于目标音质、正常网易优先、成功跨平台匹配、版本或时长不符、试听排除、全部来源失败、目标音质全部不满足、允许降级、重复并发、服务停止/配置切换、下载来源元数据、多用户隔离及完整文件校验。运行生产依赖合约、完整 CI 与 FPK 构建，再在 fnOS 实机验证下载与落库。以实现提交和实际结果更新状态。
 
-本次新增单元与音频测试在本地执行；真实 Unix Socket 测试在本地因系统权限被拒而跳过，安排 GitHub Linux CI 执行。新增 `tests/integration/download_fallback_contract.py` 在实际镜像中验证非 root、按需启动、共享租约、平台切换、空闲停止、关闭和 Socket 清理。详细结果以 [VALIDATION.md](VALIDATION.md) 的本次记录为准，旧 807 passed 不作为新功能证据。
+本次新增单元与音频测试在本地执行；真实 Unix Socket 测试在本地因系统权限被拒而跳过，已在 GitHub Linux CI 通过。新增 `tests/integration/download_fallback_contract.py` 在实际镜像中验证非 root、按需启动、共享租约、平台切换、空闲停止、关闭和 Socket 清理，结果通过。详细结果以 [VALIDATION.md](VALIDATION.md) 的本次记录为准，旧 807 passed 不作为新功能证据。
