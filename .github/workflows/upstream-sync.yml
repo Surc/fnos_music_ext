@@ -1,0 +1,60 @@
+name: Sync upstream
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: upstream-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: main
+      - name: Prepare upstream integration branch
+        id: prepare
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          bash ./scripts/sync_upstream.sh
+          branch="$(git branch --show-current)"
+          if [[ "$branch" == sync/upstream-* ]]; then
+            echo "branch=$branch" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/setup-python@v5
+        if: steps.prepare.outputs.branch != ''
+        with:
+          python-version: '3.13'
+      - uses: actions/setup-node@v4
+        if: steps.prepare.outputs.branch != ''
+        with:
+          node-version: '22'
+      - name: Validate merged code and FPK before pushing
+        if: steps.prepare.outputs.branch != ''
+        run: |
+          sudo apt-get update && sudo apt-get install -y ffmpeg rsync
+          python -m pip install -r proxy/requirements.txt -r webui-service/requirements.txt pytest pytest-asyncio qrcode pillow PyYAML
+          python -m pytest -q
+          node --check webui-service/static/app.js
+          bash ./packaging/fpk/build.sh
+      - name: Push integration branch and open PR
+        if: steps.prepare.outputs.branch != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SYNC_BRANCH: ${{ steps.prepare.outputs.branch }}
+        run: |
+          git push origin "$SYNC_BRANCH"
+          cat > /tmp/upstream-pr.md <<'EOF'
+          合并 javycoder/fnos_music_ext 最新 main，同时保留本项目网易云发现和飞牛本地画像功能。
+
+          本工作流已在合并结果上运行完整 pytest、前端语法检查及 FPK 打包。请检查上游变更和 NAS 实机验证结果后合并。
+          EOF
+          gh pr create --base main --head "$SYNC_BRANCH" --title '同步上游 fnos_music_ext' --body-file /tmp/upstream-pr.md
