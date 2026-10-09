@@ -92,6 +92,7 @@ rsync -a --delete \
     --exclude='cache/' --exclude='sources-data/' --exclude='backup/' \
     --exclude='musicbox-data/' --exclude='musicdl_outputs/' \
     --exclude='recommend_cache/' --exclude='play_history/' \
+    --exclude='discovery_cache/' --exclude='nm_playlists_cache/' \
     --exclude='online_favorites/' --exclude='online_favorites.json' \
     --exclude='*.fpk' \
     "${REPO_ROOT}/" "${STAGE}/app/repo/"

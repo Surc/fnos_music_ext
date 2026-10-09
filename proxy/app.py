@@ -37,6 +37,7 @@ from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Stre
 try:
     from . import recommend as dailyrec
     from . import nmplaylists as nmpl
+    from . import discovery
     from . import transcode as tc
     from .cache_gc import purge_rolling, sweep_orphan_lyrics
     from .env_merge import parse_env_file
@@ -44,6 +45,7 @@ try:
 except ImportError:  # uvicorn --app-dir proxy
     import recommend as dailyrec  # type: ignore
     import nmplaylists as nmpl  # type: ignore
+    import discovery  # type: ignore
     import transcode as tc  # type: ignore
     from cache_gc import purge_rolling, sweep_orphan_lyrics  # type: ignore
     from env_merge import parse_env_file  # type: ignore
@@ -521,6 +523,18 @@ _ENV_WATCH_KEYS: dict[str, tuple[str, str]] = {
     "FNMUSIC_RECOMMEND_VERIFY_TIMEOUT_S": ("", "str"),
     "FNMUSIC_REC_SEARCH_CONCURRENCY": ("", "str"),
     "FNMUSIC_REC_SEARCH_INTERVAL": ("", "str"),
+    "FNMUSIC_DISCOVERY_ENABLED": ("", "str"),
+    "FNMUSIC_NETEASE_CHANNELS": ("", "str"),
+    "FNMUSIC_NETEASE_CHANNEL_ORDER": ("", "str"),
+    "FNMUSIC_NETEASE_PLAYLIST_ORDER": ("", "str"),
+    "FNMUSIC_NETEASE_CHANNEL_LIMIT": ("", "str"),
+    "FNMUSIC_NETEASE_CATEGORY": ("", "str"),
+    "FNMUSIC_PLAYLIST_TRACK_LIMIT": ("", "str"),
+    "FNMUSIC_PLAYLIST_TRACK_CACHE_TTL": ("", "str"),
+    "FNMUSIC_PLAYLIST_REFRESH_AT": ("", "str"),
+    "FNMUSIC_PERSONALIZATION_ENABLED": ("", "str"),
+    "FNMUSIC_PERSONALIZATION_REFRESH_S": ("", "str"),
+    "FNMUSIC_PERSONALIZATION_MIN_REFRESH_S": ("", "str"),
 }
 _ENV_WATCH_INTERVAL_S = 2.0
 _ENV_WATCH_DEBOUNCE_S = 0.5
@@ -2618,7 +2632,7 @@ def ensure_registry_warm() -> None:
                       CONF.get("plt_dir") or os.path.join(_HOME, "playlist_tracks"),
                       dailyrec.play_history_dir(),
                       dailyrec.recommend_cache_dir(),
-                      nmpl.cache_dir()):
+                      nmpl.cache_dir(), discovery.cache_dir()):
         for path in _iter_registry_jsons(directory):
             try:
                 with open(path, "r", encoding="utf-8") as f:
@@ -2895,9 +2909,17 @@ async def lifespan(fastapi_app: FastAPI):
         fastapi_app.state.llm_client = httpx.AsyncClient(timeout=dailyrec.LLM_TIMEOUT_S)
         created_llm = True
 
+    discovery_task = asyncio.create_task(discovery.refresh_loop(
+        fastapi_app.state.musicbox_client, build_online_track,
+        lambda: bool(CONF.get("netease_enabled")),
+    )) if _background_jobs_enabled() else None
     try:
         yield
     finally:
+        if discovery_task:
+            discovery_task.cancel()
+            await asyncio.gather(discovery_task, return_exceptions=True)
+        await discovery.shutdown()
         tasks = [entry["task"] for entry in _SEARCH_CACHE.values() if entry.get("task") and not entry["task"].done()]
         for task in tasks:
             task.cancel()
@@ -3539,7 +3561,7 @@ def _lookup_playlist_cache_track(guid: str) -> dict | None:
     """
     if not guid:
         return None
-    for root in (dailyrec.recommend_cache_dir(), nmpl.cache_dir()):
+    for root in (dailyrec.recommend_cache_dir(), nmpl.cache_dir(), discovery.cache_dir()):
         for path in _iter_registry_jsons(root):
             try:
                 with open(path, encoding="utf-8") as f:
@@ -5879,6 +5901,11 @@ async def static_cover(request: Request, subpath: str = ""):
         guid = picked_guid
     # 网易账号歌单封面：登记的封面直链直接 302（兼容重启后反查表未重建的裸假 id）
     nm_pl_id = nmpl.playlist_id_from_cover_request(guid, request.query_params.get("coverId") or subpath)
+    discovery_cover = (discovery.cover_for(guid) or discovery.cover_for(request.query_params.get("coverId") or subpath)) if discovery.enabled() or discovery.is_guid(guid) else ""
+    if discovery_cover:
+        return RedirectResponse(discovery_cover, status_code=302)
+    if discovery.is_guid(guid):
+        return Response(status_code=404)
     if nm_pl_id:
         cover = nmpl.cover_url_for(nm_pl_id)
         if cover:
@@ -6445,7 +6472,8 @@ async def _ensure_daily_task(request: Request, user_guid: str, kind: str = "dail
         try:
             if task.exception() is None:
                 result = task.result()
-                if isinstance(result, dict) and len(result.get("tracks") or []) >= dailyrec.PLAYLIST_SIZE:
+                if (isinstance(result, dict) and len(result.get("tracks") or []) >= dailyrec.PLAYLIST_SIZE
+                        and (not dailyrec.personalization.enabled() or dailyrec.load_daily_cache(user_guid, day, kind))):
                     return task
                 if isinstance(result, dict) and not result.get("tracks"):
                     # 空结果冷却：音源全挂/LLM 不可用时构建产出 0 首，缓存为空会让
@@ -6667,7 +6695,7 @@ async def playlist_add_track(request: Request):
     if dailyrec.is_recommend_playlist_guid(playlist_guid):
         # 推荐歌单是按天重建的虚拟歌单，保持只读：吸收请求，避免伪装 id 直达官方被拒
         return JSONResponse(content={"code": 0, "msg": "", "data": None})
-    if nmpl.is_nm_playlist_guid(playlist_guid):
+    if nmpl.is_nm_playlist_guid(playlist_guid) or discovery.is_guid(playlist_guid):
         # 网易账号歌单只读（不回写网易）：同样吸收请求
         return JSONResponse(content={"code": 0, "msg": "", "data": None})
 
@@ -6730,7 +6758,7 @@ async def playlist_remove_track(request: Request):
     playlist_guid = resolve_real_guid(playlist_guid)
     if dailyrec.is_recommend_playlist_guid(playlist_guid):
         return JSONResponse(content={"code": 0, "msg": "", "data": None})
-    if nmpl.is_nm_playlist_guid(playlist_guid):
+    if nmpl.is_nm_playlist_guid(playlist_guid) or discovery.is_guid(playlist_guid):
         return JSONResponse(content={"code": 0, "msg": "", "data": None})
 
     online = [g for g in (resolve_real_guid(g) for g in track_guids) if is_online_guid(g)]
@@ -6783,7 +6811,7 @@ async def playlist_delete(request: Request):
     except Exception:
         _body = {}
     _pl_guid = str(_body.get("guid") or "").strip() if isinstance(_body, dict) else ""
-    if nmpl.is_nm_playlist_guid(resolve_real_guid(_pl_guid)):
+    if nmpl.is_nm_playlist_guid(resolve_real_guid(_pl_guid)) or discovery.is_guid(resolve_real_guid(_pl_guid)):
         # 网易账号歌单只读：吸收删除（不透传官方必被拒的假 id），下次刷新卡片仍在
         return JSONResponse(content={"code": 0, "msg": "ok", "data": None})
     envelope = await fetch_upstream_envelope(request, upstream_client)
@@ -6826,7 +6854,7 @@ def _playlist_public_fields(record: dict, tracks: list | None = None) -> dict:
         cover = str(record.get("coverId") or record.get("guid") or "")
     if cover.startswith("online:"):
         cover = "track_" + fake_official_guid(cover)
-    return {
+    return discovery.stamp_card({
         "guid": record.get("guid"),
         "name": record.get("name") or "每日推荐",
         "coverId": cover,
@@ -6834,7 +6862,7 @@ def _playlist_public_fields(record: dict, tracks: list | None = None) -> dict:
         "updatedAt": int(record.get("updatedAt") or time.time()),
         "trackCount": int(record.get("trackCount") or 0),
         "isDaily": True,
-    }
+    })
 
 
 @app.get("/music/api/v1/playlist/list")
@@ -6855,7 +6883,11 @@ async def playlist_list(request: Request):
     kinds = _recommend_injectable_kinds(user_guid)
     # 网易账号歌单：实例级内容（同热门推荐），shared 会话同样可见
     nm_on = bool(CONF.get("netease_my_playlists")) and bool(CONF.get("netease_enabled"))
-    if not kinds and not nm_on:
+    discovery_on = discovery.enabled() and bool(CONF.get("netease_enabled"))
+    # The transplanted mine channel includes created and subscribed playlists.
+    if discovery_on and "mine" in discovery.channels():
+        nm_on = False
+    if not kinds and not nm_on and not discovery_on:
         # 两个推荐开关全关（或 shared 会话无任何可注入类型）且账号歌单关闭：不注入
         return JSONResponse(content=envelope, headers=headers)
 
@@ -6899,15 +6931,38 @@ async def playlist_list(request: Request):
         it for it in official
         if not (isinstance(it, dict) and dailyrec.is_recommend_playlist_guid(str(it.get("guid") or "")))
     ]
-    data["list"] = recs + nm_cards + official
+    discovery_cards: list[dict] = []
+    if discovery_on:
+        try:
+            discovery_cards = await discovery.summaries(get_musicbox_client(request.app))
+            for card in discovery_cards:
+                fake_official_guid(card["guid"])
+            discovery.prewarm(get_musicbox_client(request.app), build_online_track, discovery_cards)
+        except Exception as exc:
+            logger.warning("discovery list injection failed: %s", type(exc).__name__)
+            discovery_cards = []
+    injected = recs + nm_cards + discovery_cards
+    if discovery_on:
+        injected = discovery.sort_cards(injected)
+    data["list"] = injected + official
     total = data.get("total")
-    data["total"] = (total if isinstance(total, int) else len(official)) + len(recs) + len(nm_cards)
+    data["total"] = (total if isinstance(total, int) else len(official)) + len(injected)
     return JSONResponse(content=envelope, headers=headers)
 
 
 @app.get("/music/api/v1/playlist/detail")
 async def playlist_detail(request: Request):
     guid = str(request.query_params.get("guid") or "").strip()
+    discovery_guid = resolve_real_guid(guid)
+    if discovery.is_guid(discovery_guid):
+        is_authed, _, auth_resp = await _probe_upstream_auth(request, get_upstream_client(request.app))
+        if not is_authed:
+            return auth_resp or Response(status_code=401)
+        uid = await discovery.account(get_musicbox_client(request.app))
+        card = discovery.card_for(discovery_guid, uid)
+        if not card or card.get("account_uid") and card["account_uid"] != uid:
+            return JSONResponse(content={"code": -1, "msg": "playlist not found", "data": None})
+        return JSONResponse(content={"code": 0, "msg": "ok", "data": card})
     nm_pl_id = nmpl.nm_playlist_id_from_guid(guid) or nmpl.nm_playlist_id_from_guid(resolve_real_guid(guid))
     if nm_pl_id:
         # 网易账号歌单：只读虚拟歌单，卡片从摘要（内存→磁盘）取；trackCount 用
@@ -6957,6 +7012,7 @@ async def playlist_detail(request: Request):
 async def playlist_batch_detail(request: Request):
     raw = request.query_params.get("guids") or request.query_params.get("guid") or ""
     guids = [g.strip() for g in raw.split(",") if g.strip()]
+    discovery_ids = [resolve_real_guid(g) for g in guids if discovery.is_guid(resolve_real_guid(g))]
     recommend_ids = [g for g in guids if dailyrec.is_recommend_playlist_guid(g)]
     nm_ids = [
         pid for pid in (
@@ -6964,7 +7020,7 @@ async def playlist_batch_detail(request: Request):
             for g in guids
         ) if pid
     ]
-    if not recommend_ids and not nm_ids and not plt_dir_has_data():
+    if not recommend_ids and not nm_ids and not discovery_ids and not plt_dir_has_data():
         return await forward_to_upstream(request, get_upstream_client(request.app))
 
     upstream_client = get_upstream_client(request.app)
@@ -6972,6 +7028,7 @@ async def playlist_batch_detail(request: Request):
         g for g in guids
         if not dailyrec.is_recommend_playlist_guid(g)
         and not nmpl.is_nm_playlist_guid(resolve_real_guid(g))
+        and not discovery.is_guid(resolve_real_guid(g))
     ]
     official_list: list = []
     if rest:
@@ -7013,6 +7070,11 @@ async def playlist_batch_detail(request: Request):
         rec = _playlist_public_fields(bundle.get("playlist") or {}, bundle.get("tracks") or [])
         rec["trackCount"] = len(bundle.get("tracks") or [])
         recs.append(rec)
+    discovery_uid = await discovery.account(get_musicbox_client(request.app)) if discovery_ids else 0
+    for g in discovery_ids:
+        card = discovery.card_for(g, discovery_uid)
+        if card and (not card.get("account_uid") or card["account_uid"] == discovery_uid):
+            recs.append(card)
     for pid in nm_ids:
         card = nmpl.card_for(pid)
         if card is not None:
@@ -7033,13 +7095,16 @@ async def playlist_track_list(request: Request):
     ).strip()
     kind = dailyrec.online_playlist_kind(guid)
     nm_pl_id = nmpl.nm_playlist_id_from_guid(guid) or nmpl.nm_playlist_id_from_guid(resolve_real_guid(guid))
-    if nm_pl_id:
+    discovery_guid = resolve_real_guid(guid)
+    if nm_pl_id or discovery.is_guid(discovery_guid):
         # 网易账号歌单曲目：可播过滤后的 VO 分页下发（与推荐歌单同款分页语义）
         upstream_client = get_upstream_client(request.app)
         is_authed, user_guid, auth_resp = await _probe_upstream_auth(request, upstream_client)
         if not is_authed and auth_resp is not None:
             return auth_resp
         tracks = dailyrec.stamp_playlist_tracks(
+            await discovery.load_tracks(get_musicbox_client(request.app), discovery_guid, build_online_track)
+            if discovery.is_guid(discovery_guid) else
             await nmpl.load_tracks(get_musicbox_client(request.app), nm_pl_id, build_online_track)
         )
         try:

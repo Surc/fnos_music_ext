@@ -943,6 +943,7 @@ chmod 0644 \
     "${BASE_DIR}/musicdl-service/app.py" "${BASE_DIR}/musicdl-service/hardening.py" \
     "${BASE_DIR}/musicbox-service/app.py" "${BASE_DIR}/musicbox-service/runner.py" \
     "${BASE_DIR}/musicbox-service/netease_ext.py" \
+    "${BASE_DIR}/musicbox-service/discovery.py" \
     "${BASE_DIR}/lxmusic-service/app.py" "${BASE_DIR}/lxmusic-service/source_runtime.py" \
     "${BASE_DIR}/lxmusic-service/verify_source.py" "${BASE_DIR}/lxmusic-service/js/bridge.js" \
     "${BASE_DIR}/webui-service/app.py" "${BASE_DIR}/webui-service/static/index.html" \
@@ -969,6 +970,18 @@ ENV_DESIRED="$(mktemp)"
     echo "FNMUSIC_FAV_DIR='$(dotenv_escape "${BASE_DIR}/online_favorites")'"
     echo "FNMUSIC_PLT_DIR='$(dotenv_escape "${BASE_DIR}/playlist_tracks")'"
     echo "FNMUSIC_PLAY_HISTORY_DIR='$(dotenv_escape "${BASE_DIR}/play_history")'"
+    echo "FNMUSIC_DISCOVERY_ENABLED='true'"
+    echo "FNMUSIC_PERSONALIZATION_ENABLED='true'"
+    echo "FNMUSIC_NETEASE_CHANNELS='mine,nrec,toplist,category,newalbum,fm'"
+    echo "FNMUSIC_NETEASE_CHANNEL_ORDER='daily,hot,mine,nrec,toplist,category,newalbum,fm'"
+    echo "FNMUSIC_NETEASE_PLAYLIST_ORDER=''"
+    echo "FNMUSIC_NETEASE_CHANNEL_LIMIT='8'"
+    echo "FNMUSIC_NETEASE_CATEGORY='华语'"
+    echo "FNMUSIC_PLAYLIST_TRACK_LIMIT='300'"
+    echo "FNMUSIC_PLAYLIST_TRACK_CACHE_TTL='21600'"
+    echo "FNMUSIC_PLAYLIST_REFRESH_AT='04:30'"
+    echo "FNMUSIC_PERSONALIZATION_REFRESH_S='21600'"
+    echo "FNMUSIC_PERSONALIZATION_MIN_REFRESH_S='1800'"
     echo "FNMUSIC_RECOMMEND_DIR='$(dotenv_escape "${BASE_DIR}/recommend_cache")'"
     echo "FNMUSIC_MUSICDL_ENABLED='${MUSICDL_FLAG}'"
     echo "FNMUSIC_NETEASE_ENABLED='${MUSICBOX_FLAG}'"

@@ -18,6 +18,7 @@ function stubEl() {
   return {
     hidden: false, textContent: "", innerHTML: "", className: "", value: "",
     checked: false, disabled: false, src: "", dataset: {}, _t: null,
+    children: [], _listeners: {},
     classList: {
       add(...c) { c.forEach((x) => classes.add(x)); },
       remove(...c) { c.forEach((x) => classes.delete(x)); },
@@ -28,7 +29,9 @@ function stubEl() {
       },
       contains(c) { return classes.has(c); },
     },
-    addEventListener() {},
+    addEventListener(type, listener) { this._listeners[type] = listener; },
+    append(...children) { this.children.push(...children); },
+    replaceChildren(...children) { this.children = [...children]; },
     querySelectorAll() { return []; },
   };
 }
@@ -36,6 +39,7 @@ function stubEl() {
 const els = new Map();
 
 global.document = {
+  createElement() { return stubEl(); },
   querySelector(sel) {
     if (!els.has(sel)) els.set(sel, stubEl());
     return els.get(sel);
@@ -237,6 +241,26 @@ test("网易账号歌单开关：loadConfig 回填 + collectConfig 收集", asyn
   enqueue("/app/fnmusic-ext/api/config", { values: { FNMUSIC_NETEASE_MY_PLAYLISTS: "false" } });
   await global.loadConfig();
   assert.strictEqual(els.get("#netease-my-playlists").checked, false);
+});
+
+test("发现分类排序：中文按钮调整顺序，保存保留个性化选择", async () => {
+  reset();
+  enqueue("/app/fnmusic-ext/api/config", { values: {
+    FNMUSIC_DISCOVERY_ENABLED: "true", FNMUSIC_PERSONALIZATION_ENABLED: "true",
+    FNMUSIC_NETEASE_CHANNEL_ORDER: "fm,daily", FNMUSIC_NETEASE_CATEGORY: "怀旧",
+  } });
+  await global.loadConfig();
+  let order = els.get("#discovery-order");
+  assert.ok(order.children[0].children[0].textContent.includes("私人 FM"));
+  assert.strictEqual(order.children[0].children[1].disabled, true);
+  order.children[0].children[2]._listeners.click();
+  order = els.get("#discovery-order");
+  assert.ok(order.children[0].children[0].textContent.includes("每日推荐"));
+  const config = global.collectConfig();
+  assert.ok(config.FNMUSIC_NETEASE_CHANNEL_ORDER.startsWith("daily,fm"));
+  assert.strictEqual(config.FNMUSIC_PERSONALIZATION_ENABLED, true);
+  assert.strictEqual(config.FNMUSIC_DISCOVERY_ENABLED, true);
+  assert.strictEqual(config.FNMUSIC_NETEASE_CATEGORY, "怀旧");
 });
 
 test("自动下载歌词开关：loadConfig 回填 + collectConfig 收集", async () => {

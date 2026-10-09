@@ -1,0 +1,30 @@
+name: Build FPK
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Validate packaging
+        run: |
+          sudo apt-get update && sudo apt-get install -y rsync
+          python -m pip install pytest
+          python -m pytest packaging/tests/test_fpk_pack.py -q
+      - name: Build package
+        run: bash ./packaging/fpk/build.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: fnmusic-ext-fpk
+          path: |
+            dist/*.fpk
+            dist/*.sha256
+          if-no-files-found: error

@@ -94,6 +94,16 @@ SCHEMA: dict[str, dict] = {
 
 _PROVIDER_KEYS = set(PROVIDERS.values())
 
+SCHEMA.update({
+    "FNMUSIC_DISCOVERY_ENABLED": {"kind": "bool", "default": "true", "group": "recommend", "reload": "hot", "label": "网易云发现歌单"},
+    "FNMUSIC_PERSONALIZATION_ENABLED": {"kind": "bool", "default": "true", "group": "recommend", "reload": "hot", "label": "结合飞牛历史和收藏"},
+    "FNMUSIC_NETEASE_CHANNELS": {"kind": "csv", "values": ["mine", "nrec", "toplist", "category", "newalbum", "fm"], "default": "mine,nrec,toplist,category,newalbum,fm", "group": "recommend", "reload": "hot", "label": "发现内容"},
+    "FNMUSIC_NETEASE_CHANNEL_ORDER": {"kind": "csv", "values": ["daily", "hot", "mine", "nrec", "toplist", "category", "newalbum", "fm"], "default": "daily,hot,mine,nrec,toplist,category,newalbum,fm", "group": "recommend", "reload": "hot", "label": "歌单分类顺序"},
+    "FNMUSIC_NETEASE_CATEGORY": {"kind": "str", "default": "华语", "group": "recommend", "reload": "hot", "label": "分类歌单"},
+    "FNMUSIC_NETEASE_CHANNEL_LIMIT": {"kind": "int", "min": 1, "max": 50, "default": "8", "group": "recommend", "reload": "hot", "label": "每类歌单数量"},
+    "FNMUSIC_PLAYLIST_REFRESH_AT": {"kind": "time", "default": "04:30", "group": "recommend", "reload": "hot", "label": "歌单缓存预热时间"},
+})
+
 
 # ------------------------------------------------------------------ .env 读写 --
 
@@ -338,9 +348,16 @@ def _normalize_value(key: str, raw) -> str:
             raw_list = [x for x in str(raw).replace("，", ",").split(",")]
         for item in raw_list:
             item = item.strip()
+            if item and spec.get("values") and item not in spec["values"]:
+                raise ValueError(f"{key}: 不支持的分类 {item}")
             if item and item not in items:
                 items.append(item)
         return ",".join(items)
+    if kind == "time":
+        text = str(raw).strip()
+        if text and not re.fullmatch(r"(?:[01][0-9]|2[0-3]):[0-5][0-9]", text):
+            raise ValueError("预热时间应为 HH:MM，留空关闭")
+        return text
     return str(raw).strip()
 
 

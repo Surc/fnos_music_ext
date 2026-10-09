@@ -22,6 +22,7 @@ from netease_ext import (
     user_playlists as fetch_user_playlists,
 )
 import runner
+from discovery import router as discovery_router
 from runner import MusicboxTimeoutError, ensure_xdg_dirs
 
 logger = logging.getLogger("musicbox_service.app")
@@ -39,6 +40,7 @@ class UpstreamException(Exception):
 
 
 app = FastAPI(title="fnmusic-musicbox", version="1.0.0")
+app.include_router(discovery_router)
 
 
 @app.exception_handler(RequestValidationError)

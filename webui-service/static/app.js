@@ -116,6 +116,15 @@ function applyConfigToForm() {
   $$("input[name=quality]").forEach((el) => { el.checked = el.value === quality; });
   $("#recommend-hot").checked = v.FNMUSIC_RECOMMEND_HOT === "true";
   $("#recommend-daily").checked = v.FNMUSIC_RECOMMEND_DAILY === "true";
+  $("#personalization-enabled").checked = v.FNMUSIC_PERSONALIZATION_ENABLED === "true";
+  $("#discovery-enabled").checked = v.FNMUSIC_DISCOVERY_ENABLED === "true";
+  const discoveryChannels = (v.FNMUSIC_NETEASE_CHANNELS || "").split(",");
+  $$("#discovery-channels input").forEach((el) => { el.checked = discoveryChannels.includes(el.value); });
+  $("#discovery-category").value = v.FNMUSIC_NETEASE_CATEGORY || "华语";
+  $("#discovery-limit").value = v.FNMUSIC_NETEASE_CHANNEL_LIMIT || "8";
+  $("#discovery-refresh").value = v.FNMUSIC_PLAYLIST_REFRESH_AT || "";
+  discoveryOrder = [...new Set((v.FNMUSIC_NETEASE_CHANNEL_ORDER || "").split(",").concat(Object.keys(discoveryLabels)))].filter((key) => key in discoveryLabels);
+  renderDiscoveryOrder();
   $("#tee-enabled").checked = v.FNMUSIC_TEE_SAVE_ENABLED === "true";
   $("#auto-cover").checked = v.FNMUSIC_AUTO_COVER !== "false";
   $("#lyric-auto-dl").checked = v.FNMUSIC_LYRIC_AUTO_DL === "true";
@@ -169,6 +178,13 @@ function collectConfig() {
     FNMUSIC_QUALITY_MODE: ($$("input[name=quality]").find((el) => el.checked) || {}).value || "high",
     FNMUSIC_RECOMMEND_HOT: $("#recommend-hot").checked,
     FNMUSIC_RECOMMEND_DAILY: $("#recommend-daily").checked,
+    FNMUSIC_PERSONALIZATION_ENABLED: $("#personalization-enabled").checked,
+    FNMUSIC_DISCOVERY_ENABLED: $("#discovery-enabled").checked,
+    FNMUSIC_NETEASE_CHANNELS: $$("#discovery-channels input:checked").map((el) => el.value).join(","),
+    FNMUSIC_NETEASE_CHANNEL_ORDER: discoveryOrder.join(","),
+    FNMUSIC_NETEASE_CATEGORY: $("#discovery-category").value.trim(),
+    FNMUSIC_NETEASE_CHANNEL_LIMIT: parseInt($("#discovery-limit").value || "8", 10),
+    FNMUSIC_PLAYLIST_REFRESH_AT: $("#discovery-refresh").value,
     FNMUSIC_TEE_SAVE_ENABLED: $("#tee-enabled").checked,
     FNMUSIC_AUTO_COVER: $("#auto-cover").checked,
     FNMUSIC_LYRIC_AUTO_DL: $("#lyric-auto-dl").checked,
@@ -684,6 +700,37 @@ if ($("#lx-name")) {
 $$("input[name=quality]").forEach((el) => el.addEventListener("change", () => markDirty("音质偏好需保存后生效")));
 ["#recommend-hot", "#recommend-daily", "#search-probe", "#search-deep", "#tee-enabled", "#fav-autobind", "#auto-cover", "#lyric-auto-dl", "#netease-my-playlists"].forEach((sel) =>
   $(sel).addEventListener("change", () => markDirty()));
+
+const discoveryLabels = {daily: "每日推荐", hot: "热门推荐", mine: "我的及收藏歌单", nrec: "为你推荐歌单", toplist: "排行榜", category: "分类歌单", newalbum: "新碟上架", fm: "私人 FM"};
+let discoveryOrder = Object.keys(discoveryLabels);
+function renderDiscoveryOrder() {
+  const root = $("#discovery-order");
+  root.replaceChildren();
+  discoveryOrder.forEach((key, index) => {
+    const row = document.createElement("div");
+    row.className = "switch-row";
+    const label = document.createElement("span");
+    label.textContent = `${index + 1}. ${discoveryLabels[key]}`;
+    row.append(label);
+    [-1, 1].forEach((step) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "btn";
+      button.textContent = step < 0 ? "上移" : "下移";
+      button.disabled = index + step < 0 || index + step >= discoveryOrder.length;
+      button.addEventListener("click", () => {
+        [discoveryOrder[index], discoveryOrder[index + step]] = [discoveryOrder[index + step], discoveryOrder[index]];
+        renderDiscoveryOrder();
+        markDirty();
+      });
+      row.append(button);
+    });
+    root.append(row);
+  });
+}
+$$("#discovery-channels input").forEach((el) => el.addEventListener("change", () => markDirty()));
+["#personalization-enabled", "#discovery-enabled"].forEach((sel) => $(sel).addEventListener("change", () => markDirty()));
+["#discovery-category", "#discovery-limit", "#discovery-refresh"].forEach((sel) => $(sel).addEventListener("input", () => markDirty()));
 
 function updateTeeCountLabel() {
   const n = $("#tee-max").value || configValues.FNMUSIC_TEE_CACHE_MAX || "2";

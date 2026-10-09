@@ -4,6 +4,7 @@ on:
   push:
     branches: [main, dev]
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -50,6 +51,7 @@ jobs:
           lxmusic-service/app.py lxmusic-service/lxserver_client.py lxmusic-service/verify_source.py
           musicdl-service/app.py musicdl-service/hardening.py
           musicbox-service/app.py musicbox-service/runner.py musicbox-service/netease_ext.py
+          musicbox-service/discovery.py proxy/discovery.py proxy/personalization.py
           webui-service/app.py
 
       # 覆盖率仅作摘要展示（不设门槛）；cov 参数只出现在 CI，本地 pytest 无需装 pytest-cov
@@ -85,7 +87,7 @@ jobs:
 
       - name: Build fpk package
         run: |
-          ./packaging/fpk/build.sh
+          bash ./packaging/fpk/build.sh
           ls -la dist/
 
       - name: Verify package artifact
@@ -99,6 +101,14 @@ jobs:
           tar -tzf "$fpk_file" | grep -E '^manifest$'
           tar -tzf "$fpk_file" | grep -E '^ICON\.PNG$'
           ( cd dist && sha256sum -c "$(basename "$fpk_file").sha256" )
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: fnmusic-ext-fpk
+          path: |
+            dist/*.fpk
+            dist/*.sha256
+          if-no-files-found: error
 
 
   production:
