@@ -1,10 +1,14 @@
 # fnmusic-ext 飞牛音乐扩展代理
 
-Gitee：https://gitee.com/javycoder/fnos_music_ext
+本移植版本在原工程 v2.7.0 上增加网易云发现歌单、私人 FM 和按飞牛用户自己的历史/收藏优化的每日推荐，保留三音源切换和 AI 补充。新增功能与设置见 [推荐使用说明](docs/PERSONALIZATION.md)，后续更新见 [上游同步说明](docs/UPSTREAM.md)。
 
-GitHub：https://github.com/javycoder/fnos_music_ext
+本地打包：`./packaging/fpk/build.sh`。GitHub Actions 中的 **Build FPK** 可直接生成并下载安装包；**Sync upstream** 用于测试后创建上游同步 PR。
 
-[![CI](https://github.com/javycoder/fnos_music_ext/actions/workflows/ci.yml/badge.svg?branch=dev)](https://github.com/javycoder/fnos_music_ext/actions/workflows/ci.yml)
+GitHub：https://github.com/Surc/fnos_music_ext
+
+原工程：[javycoder/fnos_music_ext](https://github.com/javycoder/fnos_music_ext)；功能参考：[gzywd/fnos_music_ext](https://github.com/gzywd/fnos_music_ext)。保留原工程 MIT 许可证和提交历史。
+
+[![CI](https://github.com/Surc/fnos_music_ext/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Surc/fnos_music_ext/actions/workflows/ci.yml)
 
 `fnmusic-ext` 是专为 fnOS（飞牛私有云）自带音乐应用（`trim.music`）打造的**无侵入增强扩展**。它通过接管官方后端的 Unix Socket 通信入口，在完全不修改官方程序、nginx 配置与数据库的前提下，让原生飞牛音乐获得在线音乐能力；可随时一条命令还原官方直连。
 
@@ -64,7 +68,7 @@ GitHub：https://github.com/javycoder/fnos_music_ext
 
 ### 安装（推荐：应用中心 fpk 包）
 
-从 [GitHub Releases](https://github.com/javycoder/fnos_music_ext/releases) 下载最新 `fnmusic-ext-<版本>.fpk`，在 fnOS「应用中心 → 手动安装」选择该文件，按向导选择**初始音源**即可自动完成安装并启用。
+从本仓库 Actions → **Build FPK** 下载构建包，或从 [GitHub Releases](https://github.com/Surc/fnos_music_ext/releases) 下载已发布的 `fnmusic-ext-<版本>.fpk`，在 fnOS「应用中心 → 手动安装」选择该文件，按向导选择**初始音源**即可自动完成安装并启用。
 
 - 桌面会出现「fnMusic 扩展管理」图标，点击即在飞牛桌面窗口内打开管理页（音源切换/扫码登录/平台选择/洛雪源配置）；
 - 选洛雪音源时向导不索要任何源信息：装好后打开管理页，在「音乐源 → 洛雪自定义源」里粘贴脚本 URL、上传电脑 `.js` 文件或从 NAS 选择，测试可用后保存即激活；
@@ -80,7 +84,7 @@ GitHub：https://github.com/javycoder/fnos_music_ext
 
 ```bash
 sudo apt-get update && sudo apt-get install -y python3 python3-venv git
-git clone https://github.com/javycoder/fnos_music_ext.git fnmusic_ext
+git clone https://github.com/Surc/fnos_music_ext.git fnmusic_ext
 cd fnmusic_ext
 chmod +x install.sh extend.sh restore.sh proxy/run_proxy.sh
 ./install.sh
