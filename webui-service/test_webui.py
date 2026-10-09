@@ -836,3 +836,39 @@ def test_api_config_put_retries_lx_activate_when_env_unchanged(env_file, svctl):
     assert len(activate_calls) == 1
     assert activate_calls[0]["url"] == "http://lx.test/source.js"
 
+
+
+def test_fallback_enable_does_not_switch_primary(env_file, svctl):
+    with authed_client() as client:
+        response = client.put("/api/config", json={"values": {
+            "FNMUSIC_DOWNLOAD_FALLBACK_ENABLED": True,
+            "FNMUSIC_DOWNLOAD_FALLBACK_SOURCES": "migu,kuwo",
+        }})
+    assert response.status_code == 200
+    assert ("start", "fallback-control") in svctl.calls
+    assert not any(c[0] == "stop" and c[1] == "musicbox" for c in svctl.calls)
+    assert webui.current_provider(webui.read_env()) == "musicbox"
+    assert webui.read_env()["FNMUSIC_DOWNLOAD_FALLBACK_SOURCES"] == "migu,kuwo"
+
+
+def test_fallback_stops_when_primary_changes(env_file, svctl):
+    webui.write_env({"FNMUSIC_DOWNLOAD_FALLBACK_ENABLED": "true"})
+    with authed_client() as client:
+        response = client.put("/api/config", json={"values": {"FNMUSIC_MUSICDL_ENABLED": True,
+                                                              "FNMUSIC_NETEASE_ENABLED": False,
+                                                              "FNMUSIC_LX_ENABLED": False}})
+    assert response.status_code == 200
+    assert ("stop", "fallback-control") in svctl.calls and ("stop", "musicdl-fallback") in svctl.calls
+    assert webui.current_provider(webui.read_env()) == "musicdl"
+
+
+@pytest.mark.parametrize("values", [
+    {"FNMUSIC_DOWNLOAD_FALLBACK_SOURCES": ""},
+    {"FNMUSIC_DOWNLOAD_FALLBACK_SOURCES": "netease"},
+    {"FNMUSIC_DOWNLOAD_FALLBACK_TARGET": "fake_hires"},
+])
+def test_invalid_fallback_settings_fail_before_file_write(env_file, values):
+    before = env_file.read_bytes()
+    with authed_client() as client:
+        response = client.put("/api/config", json={"values": values})
+    assert response.status_code == 400 and env_file.read_bytes() == before
