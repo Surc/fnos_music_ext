@@ -55,6 +55,7 @@ jobs:
           musicdl-service/app.py musicdl-service/hardening.py
           musicbox-service/app.py musicbox-service/runner.py musicbox-service/netease_ext.py
           musicbox-service/discovery.py proxy/discovery.py proxy/personalization.py
+          proxy/download_fallback.py proxy/fallback_control.py
           webui-service/app.py
 
       # 覆盖率仅作摘要展示（不设门槛）；cov 参数只出现在 CI，本地 pytest 无需装 pytest-cov
@@ -103,6 +104,8 @@ jobs:
           tar -tzf "$fpk_file" | grep -E '^cmd/main$'
           tar -tzf "$fpk_file" | grep -E '^manifest$'
           tar -tzf "$fpk_file" | grep -E '^ICON\.PNG$'
+          tar -xOzf "$fpk_file" app.tgz | tar -tzf - | grep -E '/proxy/download_fallback\.py$'
+          tar -xOzf "$fpk_file" app.tgz | tar -tzf - | grep -E '/proxy/fallback_control\.py$'
           ( cd dist && sha256sum -c "$(basename "$fpk_file").sha256" )
 
       - uses: actions/upload-artifact@v4
@@ -166,3 +169,16 @@ jobs:
             sleep 1
           done
           test "$ready" = 1
+      - name: Verify download fallback lifecycle as non-root
+        run: |
+          mkdir -p /tmp/fnfallback-repo
+          printf '%s\n' 'FNMUSIC_NETEASE_ENABLED=true' 'FNMUSIC_DOWNLOAD_FALLBACK_ENABLED=true' \
+            'FNMUSIC_WEBUI_ENABLED=false' > /tmp/fnfallback-repo/.env
+          sudo chown -R 1000:1000 /tmp/fnfallback-repo
+          name="fnmusic-ci-fallback"
+          trap 'docker logs "$name"; docker rm -f "$name"' EXIT
+          docker run -d --name "$name" --network none \
+            -v /tmp/fnfallback-repo:/repo \
+            -v "$PWD/tests/integration/download_fallback_contract.py:/tmp/fallback_contract.py:ro" \
+            fnmusic-sources:ci
+          docker exec --user 1000 "$name" python /tmp/fallback_contract.py
