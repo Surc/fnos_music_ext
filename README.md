@@ -136,7 +136,7 @@ curl -s --unix-socket /var/run/trim_music.socket http://localhost/_ext/healthz
 
 新增模块为 `musicbox-service/discovery.py`（网易云 API）、`proxy/discovery.py`（歌单与缓存）、`proxy/personalization.py`（用户画像），由原有代理、推荐和管理页接入。固定上游提交与维护边界见 [UPSTREAM.md](docs/UPSTREAM.md)。
 
-v2.7.1 的 GitHub CI 已通过 **11 项检查**：Python 3.11 / 3.13 各 **807 个测试**、六组生产依赖合约、Docker 及 FPK。v2.8.0 补源候选的本地相关回归为 **197 passed、1 Socket 权限跳过**，本地 FPK 已构建；新代码的完整 CI 尚待运行。各版本证据分开记录在 [VALIDATION.md](docs/VALIDATION.md)。**fnOS 实机安装、升级与真实账号下载播放尚未验收。**
+v2.7.1 的 GitHub CI 历史结果为两版本各 **807 个测试**。v2.8.0 补源功能的 [PR #3](https://github.com/Surc/fnos_music_ext/pull/3) 已通过 [11 项 CI](https://github.com/Surc/fnos_music_ext/actions/runs/37921652490)：Python 3.11 / 3.13 各 **857 passed**、六组生产依赖合约、真实非 root 容器补源生命周期、Docker 及 FPK 构建校验。此版本尚未发布，CI 的 **fnmusic-ext-fpk** 产物可供测试；v2.7.1 Release 不含补源功能。各版本证据见 [VALIDATION.md](docs/VALIDATION.md)。**fnOS 实机安装、升级与真实账号下载播放尚未验收。**
 
 ```bash
 python3 -m pytest
