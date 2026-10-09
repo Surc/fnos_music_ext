@@ -1,4 +1,6 @@
-# 安装与部署指南
+# 集成版安装、升级与部署指南
+
+适用于 [Surc/fnos_music_ext](https://github.com/Surc/fnos_music_ext) v2.7.1。本版增加网易云发现、私人 FM 和每个飞牛用户自己的历史 / 收藏画像。功能设置见 [发现与推荐说明](PERSONALIZATION.md)，打包与原工程更新见 [UPSTREAM.md](UPSTREAM.md)。
 
 适用环境：飞牛 NAS（fnOS）已安装并启动「飞牛音乐」官方应用。本项目采用无侵入接管设计，**完全不修改**飞牛官方 nginx 配置、不 Patch 官方二进制、不改动官方数据库。
 
@@ -20,7 +22,7 @@
 克隆项目并进入根目录赋予执行权限（**仅脚本安装需要**，fpk 安装可跳过）：
 
 ```bash
-git clone https://github.com/javycoder/fnos_music_ext.git fnmusic_ext
+git clone https://github.com/Surc/fnos_music_ext.git fnmusic_ext
 cd fnmusic_ext
 chmod +x install.sh extend.sh restore.sh proxy/run_proxy.sh
 ```
@@ -49,11 +51,17 @@ v2.0.0 起部署形态固定为两部分：
 
 ### 方式 A：应用中心 fpk 安装（推荐）
 
-从 [GitHub Releases](https://github.com/javycoder/fnos_music_ext/releases) 下载最新 `fnmusic-ext-<版本>.fpk`，在 fnOS「应用中心 → 手动安装」选择该文件：
+从 [本仓库 GitHub Releases](https://github.com/Surc/fnos_music_ext/releases) 下载 `fnmusic-ext-<版本>.fpk` 与对应 `.sha256`，在 fnOS「应用中心 → 手动安装」选择 FPK。自行构建可用 Actions → **Build FPK** → Run workflow，成功后下载 **Artifacts → fnmusic-ext-fpk** 并解压。
 
-1. 向导中选择**初始音源**（musicdl / musicbox / lxmusic，选 lxmusic 需填写源脚本 URL）；
+1. 向导中选择**初始音源**；使用本版网易云发现请选择 musicbox。选择 lxmusic 时向导不要求源脚本，装好后在管理页配置；
 2. 保持「安装完成后立即启用扩展」开启，安装即自动完成容器构建、代理接管与全链路验收；
-3. 桌面出现「fnMusic 扩展管理」图标，用飞牛管理员点击打开管理页（`/app/fnmusic-ext`）。
+3. 桌面出现「fnMusic 扩展管理」图标，用飞牛管理员点击打开（`/app/fnmusic-ext`）；在「音乐源」完成网易扫码，在「播放与推荐」开启「每日推荐」「结合我的飞牛历史和收藏」「显示发现歌单」，勾选类别后「保存并生效」。回到飞牛音乐刷新列表。
+
+### 从原版 FPK 升级
+
+应用 ID 沿用 `fnmusic-ext`，直接在应用中心安装本版作为同应用升级。升级会备份并恢复原有 `.env`、网易云登录、收藏、播放历史等数据；不要并行部署另一份代理。已有自定义开关值会保留，升级后请检查「播放与推荐」的新设置。新键缺失时可在管理页开启并保存，不要直接用 `.env.example` 覆盖现有配置。
+
+家庭成员的飞牛画像独立，网易云发现仍使用 NAS 上共享的扫码账号；并未增加逐用户绑定网易账号。私人歌单、推荐和 FM 需要有效网易云登录。
 
 日常启停在应用中心完成：「停止」秒级还原官方直连，「启动」恢复扩展。卸载会先自动备份配置与数据到存储卷根目录（`fnmusic-ext-backup-<时间戳>.tar.gz`）再清理。
 
@@ -84,7 +92,7 @@ sudo appcenter-cli uninstall fnmusic-ext                # 卸载（自动备份�
    - `2` musicdl：进入平台多选子菜单（默认精选酷我+咪咕；全部平台编号见 [../musicdl-service/PLATFORMS.md](../musicdl-service/PLATFORMS.md)）；
    - `3` 洛雪 lxmusic：直接安装（无源状态），源脚本装好在管理页 WebUI 配置；也可在安装命令附 `--lx-source-url`（URL / 本机 `.js` 路径），安装时进行「下载→初始化→搜索→解析→探活」全链路校验；
 2. **是否安装管理 WebUI**（仅本机 8774，默认否；打开时走飞牛管理员登录）；
-3. **大模型每日推荐（可选）**：OpenAI 兼容 API，仅在未启用网易音源时作为推荐兜底；
+3. **大模型每日推荐（可选）**：OpenAI 兼容 API；本地画像模式下也可补充网易日推，没有模型配置仍能使用网易发现和本地画像；
 4. **一键启用**：确认后自动调用 `./extend.sh` 接管验收。
 
 ### 非交互静默部署（自动化脚本）
@@ -201,13 +209,16 @@ sudo appcenter-cli uninstall fnmusic-ext                # 卸载（自动备份�
 
 ## 6. 推荐歌单工作机制
 
-用户登录飞牛音乐后，左侧歌单顶部呈现两个独立推荐歌单，各自受开关控制（默认都开）：
+本版把每日 / 热门推荐与六类网易云发现接入原生歌单列表；显示内容和顺序由管理页「播放与推荐」控制，详细行为见 [PERSONALIZATION.md](PERSONALIZATION.md)。
 
 **「每日推荐 MM-DD」**（`FNMUSIC_RECOMMEND_DAILY` 控制），按当前音源裁剪：
 
-1. **网易每日推荐**：musicbox 源且已扫码登录时，直连网易云个性化推荐；
-2. **大模型兜底**：仅非网易音源且配置了 `FNMUSIC_LLM_*` 时启用；
-3. **关键词兜底**：全链路失败时按听歌历史关键词检索，确保歌单始终可用。
+1. **本地画像候选**：开启画像且有记录时，从偏好的两位歌手中尝试选择可播曲目；
+2. **网易日推**：musicbox 登录后获取候选，按当前飞牛用户的历史 / 收藏做排除和排序；
+3. **AI 补充**：配置有效 `FNMUSIC_LLM_*` 后使用，画像模式下为 AI 留出补充位置；
+4. **本地曲库兜底**：网络 / AI 候选不足时尝试本地现存曲目，无本地曲库或可播候选时不保证有内容。
+
+发现类别为「我的及收藏歌单」「为你推荐歌单」「排行榜」「分类歌单」「新碟上架」「私人 FM」。私人三类需要网易登录；它们是网易云账号的内容，不会被飞牛本地画像重排。普通曲目默认六小时缓存，FM 五分钟，每日推荐默认六小时或跨日重建，画像变化后最短半小时才重建。
 
 **「热门推荐」**（`FNMUSIC_RECOMMEND_HOT` 控制），榜单原味、不排除已收藏曲目：
 

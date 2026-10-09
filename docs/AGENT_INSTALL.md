@@ -1,4 +1,4 @@
-# Agent 安装提示词
+# 集成版 Agent 安装提示词
 
 本提示词专为 AI CLI Agent（如 OpenCode、Claude Code、Cursor 等）自动化部署与运维设计。
 人工详细安装步骤、部署形态说明与背景见：[安装与部署指南](INSTALL.md)。
@@ -7,9 +7,9 @@
 
 ```text
 你在一台已安装飞牛 NAS（fnOS）和「飞牛音乐」(trim.music) 的机器上工作。
-仓库是 fnmusic-ext v2.0.0：无侵入 Unix Socket 代理，扩展在线搜索/播放/歌词/封面/
+仓库是 Surc/fnos_music_ext v2.7.1 集成版：无侵入 Unix Socket 代理，扩展在线搜索/播放/歌词/封面/
 边听边存；三个音源 + WebUI 合并为单个 Docker 容器 fnmusic-sources（supervisor 按
-.env 只启动所选音源进程）。
+.env 只启动所选音源进程）。新增网易云发现歌单、私人 FM、按飞牛用户自己的历史与收藏优化的每日推荐。先阅读 docs/PERSONALIZATION.md；使用完整发现功能需选择 musicbox 并由用户扫码登录网易云。
 
 【核心运行原则与硬约束（违反即失败）】
 1. 禁止修改 /usr/trim/nginx 以及任何 nginx 配置；飞牛系统更新或配置重载会回写覆盖。
@@ -18,7 +18,7 @@
 4. 绝对禁止擅自安装 Docker 引擎：fnOS 的 Docker 必须在「应用中心」由系统管理员安装。v2.0.0 仅支持 Docker 部署：若环境未安装 Docker 或 docker daemon 不可用，install.sh 会直接报错退出——此时应报告用户先安装 Docker，严禁执行 apt-get install docker 等命令，严禁尝试任何 host 模式替代。
 5. 部署形态：核心代理由宿主机 systemd（项目根 .venv-proxy 虚拟环境）运行并接管 /var/run/trim_music.socket；音源（musicdl 8768 / musicbox 8770 / lxmusic 8772）与 WebUI（8774）全部在单容器 fnmusic-sources 内按需运行。
 6. 音源三选一互斥：--sources 与 .env 的三个 FNMUSIC_*_ENABLED 开关只能有一个为 true，跨音源组合会被 install.sh 拒绝。换源属于运行期操作（WebUI 或改 .env 后 ./extend.sh），不要通过重装切换。
-7. 洛雪 lxmusic 源：播放解析依赖用户提供的洛雪自定义源脚本 URL（LX_SOURCE_URL）。非交互安装选 lxmusic 时必须携带 --lx-source-url '<URL>'；安装器会在容器内做全链路校验（下载→初始化→搜索→解析→探活）。校验失败分类提示，Agent 应把原始错误转告用户而不是自行编造 URL。仅当用户明确接受“源暂不可用也要先装好”时才可追加 --lx-skip-verify（跳过校验直接激活，源状态装好后在 WebUI 查看）。
+7. 洛雪 lxmusic 源由用户提供。可用 --lx-source-url '<URL 或本机 .js 路径>'，也可先 --sources lxmusic --webui 无源安装，再由用户在管理页上传或选择脚本。提供源时安装器做全链路校验，失败后转告实际错误，不编造 URL；仅在用户接受源暂不可用时追加 --lx-skip-verify。
 8. 一键扩展 ./extend.sh 与一键还原 ./restore.sh（含彻底清理 ./restore.sh --full）必须始终保持可用；扩展失败必须安全秒级回滚到官方直连。
 9. 单机单部署：代理单元名、音源容器名与安装锁全局唯一，本机以 /var/lib/fnmusic-ext/deployment 登记当前部署目录。从另一份仍存在的仓库副本执行安装/扩展/还原会被拒绝；Agent 不得用克隆目录绕过，应在原部署目录操作，或经用户确认后使用 --adopt 显式迁移部署。原登记目录已删除时不拦截。
 10. WebUI（端口 8774）只发布在 127.0.0.1。浏览器从飞牛统一网关进入，且仅管理员（X-Trim-Isadmin）可调用管理接口。安装开关为 --webui / --no-webui，非交互默认不装。不要再设置单独的管理密码。
@@ -41,9 +41,11 @@
     ./install.sh --non-interactive --sources musicbox --webui --extend
   - musicdl（默认精选酷我+咪咕；平台粒度用 musicdl-<短名> 或编号）：
     ./install.sh --non-interactive --sources musicdl --extend
-  - 洛雪 lxmusic（--lx-source-url 必填）：
+  - 洛雪 lxmusic（用户已提供源时）：
     ./install.sh --non-interactive --sources lxmusic --lx-source-url '<URL>' --extend
-  - 大模型推荐兜底（可选；密钥仅写入 .env，禁止 echo）：
+  - 洛雪无源安装，装好后在管理页配置：
+    ./install.sh --non-interactive --sources lxmusic --webui --extend
+  - 大模型推荐补充（可选；密钥仅写入 .env，禁止 echo）：
     追加 --enable-recommend --llm-base-url '<URL>' --llm-api-key '<KEY>' --llm-model '<模型>'
   - 若安装时未加 --extend，则需在安装完成后显式执行 ./extend.sh。
 
@@ -59,7 +61,13 @@
   4. Python 语法检查：.venv-proxy/bin/python -m py_compile proxy/app.py proxy/recommend.py
      （可选：.venv-proxy/bin/python -m pytest -q）
 
-步骤 5：还原机制与彻底卸载规范（知悉与必要时使用）
+步骤 5：集成版新功能验收
+  1. 用管理员在「音乐源」完成网易云扫码，不收集或输出用户凭据。
+  2. 在「播放与推荐」检查每日推荐、结合飞牛历史和收藏、显示发现歌单及六类选择，保存并生效。
+  3. 使用飞牛音乐分别检查发现列表、歌单曲目、FM 和每日推荐；记录实际是否可播放，不以 healthz 通过代替实机播放结论。
+  4. 多用户验收时区分飞牛画像按用户独立、网易账号在 NAS 上共享；不宣称已实现逐用户网易登录。
+
+步骤 6：还原机制与彻底卸载规范（知悉与必要时使用）
   - 日常无损还原：./restore.sh —— 复位 Socket、停用代理、停止音源容器，秒级恢复官方直连；.env 与全部数据保留。
   - 彻底清理：./restore.sh --full —— 额外删除 .env、登录态、缓存、收藏、历史与 .venv-*。
 
@@ -69,5 +77,5 @@
 2. 所选音源与端口（musicdl 127.0.0.1:8768 / musicbox 127.0.0.1:8770 / lxmusic 127.0.0.1:8772）及 WebUI 是否安装（127.0.0.1:8774，飞牛管理员打开）；
 3. 洛雪源校验结论（若适用：源名称/版本/推导平台）；每日推荐是否开启（严禁复述敏感密钥）；
 4. healthz 接口探测响应 JSON；
-5. extend 链路接管与验收状态。
+5. extend 链路接管与验收状态；发现、FM、每日推荐和实机播放分别说明实测结果与未验证项。
 ```
