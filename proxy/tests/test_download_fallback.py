@@ -203,6 +203,59 @@ async def test_netease_meets_target_without_starting_standby(active_fallback, mo
 
 
 @pytest.mark.asyncio
+async def test_low_cache_does_not_hide_newly_available_netease_lossless(active_fallback, monkeypatch):
+    guid = "online:netease:1"
+    old = active_fallback / "old.mp3"
+    old.write_bytes(b"old audio")
+    proxy.remember_media_path(guid, str(old))
+    monkeypatch.setattr(df, "inspect_audio", lambda _: audio(False))
+    calls = []
+    async def primary(*_):
+        calls.append("netease")
+        path = active_fallback / "upgraded.part"
+        path.write_bytes(b"new audio" * 512)
+        return df.Download(str(path), REF, audio(), "netease", "1")
+    monkeypatch.setattr(proxy, "_download_netease_candidate", primary)
+    @asynccontextmanager
+    async def forbidden(*_):
+        pytest.fail("current NetEase download meets target; standby must stay stopped")
+        yield
+    monkeypatch.setattr(df, "standby", forbidden)
+    result = await proxy._full_fetch_download(guid, {})
+    assert calls == ["netease"] and result["dest"].endswith(".flac")
+    assert proxy.find_cache_file(guid) == result["dest"] and old.read_bytes() == b"old audio"
+    with open(result["dest"] + ".fnmusic-source.json", encoding="utf-8") as file:
+        marker = json.load(file)
+    assert marker["provider"] == "netease" and marker["trigger"] == "netease_priority"
+    assert not list(active_fallback.glob("*.part"))
+
+
+@pytest.mark.asyncio
+async def test_lower_fresh_netease_keeps_better_cache_when_downgrade_allowed(active_fallback, monkeypatch):
+    monkeypatch.setenv(df.ENV_PREFIX + "ALLOW_DOWNGRADE", "true")
+    guid = "online:netease:1"
+    old = active_fallback / "old.mp3"
+    old.write_bytes(b"old audio")
+    proxy.remember_media_path(guid, str(old))
+    monkeypatch.setattr(df, "inspect_audio", lambda _: audio(False))
+    calls = []
+    async def primary(*_):
+        calls.append("netease")
+        path = active_fallback / "lower.part"
+        path.write_bytes(b"lower audio" * 512)
+        return df.Download(str(path), REF, audio(False, bitrate=128000), "netease", "1")
+    monkeypatch.setattr(proxy, "_download_netease_candidate", primary)
+    @asynccontextmanager
+    async def unavailable(*_):
+        raise RuntimeError("standby unavailable")
+        yield
+    monkeypatch.setattr(df, "standby", unavailable)
+    result = await proxy._full_fetch_download(guid, {})
+    assert calls == ["netease"] and result["dest"] == str(old)
+    assert old.read_bytes() == b"old audio" and not list(active_fallback.glob("*.part"))
+
+
+@pytest.mark.asyncio
 async def test_unavailable_netease_uses_backup_keeps_original_identity(active_fallback, monkeypatch):
     async def unavailable(*_):
         return None
