@@ -3659,6 +3659,9 @@ def _tee_finalize(part: str, guid: str, ext: str, info: dict | None, tee_enabled
     if tee_enabled:
         title, artist, album = _tee_metadata_fallback(guid, title, artist, album, src)
         dest = library_media_path(guid, title, ext, artist=artist, directory=tee_save_dir())
+        if src.get("download_provenance") and os.path.splitext(dest)[1].lower() != "." + ext.lower():
+            # The legacy path helper can reuse an MP3 filename for an upgraded FLAC.
+            dest = _path_stem(dest) + "." + ext
         os.replace(part, dest)
         if src.get("download_provenance"):
             df.write_provenance(dest, src["download_provenance"])
@@ -4332,6 +4335,7 @@ async def _download_with_fallback(guid: str, cred_headers: dict, settings: df.Se
         _fallback_download_slots = asyncio.Semaphore(2)
     selected = None
     primary = None
+    fresh_primary = None
     try:
         async with asyncio.timeout(settings.budget_s), _fallback_download_slots:
             request = _synth_request(cred_headers)
@@ -4347,16 +4351,19 @@ async def _download_with_fallback(guid: str, cred_headers: dict, settings: df.Se
                         primary = df.Download(existing, info, audio, "unknown_existing", "", owned=False)
                 except (ValueError, OSError, subprocess.SubprocessError, RuntimeError):
                     pass
-            if primary is None:
-                try:
-                    primary = await _download_netease_candidate(request, guid, info, settings)
-                except (httpx.HTTPError, ValueError, OSError, subprocess.SubprocessError, RuntimeError):
-                    primary = None
+            # A low-quality cache must not hide newly available NetEase rights/quality.
+            try:
+                fresh_primary = await _download_netease_candidate(request, guid, info, settings)
+            except (httpx.HTTPError, ValueError, OSError, subprocess.SubprocessError, RuntimeError):
+                fresh_primary = None
+            if fresh_primary and (primary is None or
+                                  df.quality_rank(fresh_primary.audio) > df.quality_rank(primary.audio)):
+                primary = fresh_primary
             if primary and df.meets_target(primary.audio, settings.target):
                 selected = primary
                 trigger = "netease_priority"
             else:
-                trigger = "below_target" if primary else "netease_unavailable"
+                trigger = "below_target" if fresh_primary else "netease_unavailable"
                 socket_path = os.environ.get(df.ENV_PREFIX + "CONTROL_SOCKET") or os.path.join(
                     _HOME, "sources-data", "download-fallback.sock")
                 fallback_url = os.environ.get(df.ENV_PREFIX + "URL", "http://127.0.0.1:8776")
@@ -4398,6 +4405,8 @@ async def _download_with_fallback(guid: str, cred_headers: dict, settings: df.Se
             selected.discard()
         if primary and primary is not selected:
             primary.discard()
+        if fresh_primary and fresh_primary is not primary and fresh_primary is not selected:
+            fresh_primary.discard()
 
 
 async def _full_fetch_download(guid: str, cred_headers: dict, force_mp3: bool = False) -> dict | None:
