@@ -154,6 +154,38 @@
         "conclusion": "success"
       },
       "nas_acceptance": "pending"
+    },
+    {
+      "version": "2.8.0",
+      "tag": "v2.8.0",
+      "commit": "3e9c6cdb4f8e90416457dde9a3dc3984831b023b",
+      "url": "https://github.com/Surc/fnos_music_ext/releases/tag/v2.8.0",
+      "published_at": "2026-10-09T14:25:18Z",
+      "assets": [
+        {
+          "name": "fnmusic-ext-2.8.0.fpk",
+          "size_bytes": 27117969,
+          "sha256": "22a3bc847d2cb8e929cf9d1832dfd7325e143e0ba800e01b8ce528dbb798790e"
+        },
+        {
+          "name": "fnmusic-ext-2.8.0.fpk.sha256",
+          "size_bytes": 88,
+          "sha256": "59a0114a4961c86cb8374b91f7b4c6f2011e33e3eaca2506ce6b43a52ab5620b"
+        }
+      ],
+      "ci": {
+        "url": "https://github.com/Surc/fnos_music_ext/actions/runs/37943422317",
+        "conclusion": "success",
+        "checks_passed": 11,
+        "pytest_passed_per_version": 857
+      },
+      "release_workflow": {
+        "url": "https://github.com/Surc/fnos_music_ext/actions/runs/37944046519",
+        "conclusion": "success",
+        "packaging_tests_passed": 67
+      },
+      "nas_acceptance": "pending",
+      "asset_verification": "GitHub Release API digests and sizes; same-commit CI FPK structure, modules and SHA256 passed; official attachments not independently re-downloaded in this environment."
     }
   ],
   "toolchain": {
@@ -212,9 +244,9 @@
   "planned_work": [
     {
       "id": "netease-cross-platform-download-fallback",
-      "status": "implemented",
+      "status": "released",
       "requested_on": "2026-10-09",
-      "included_in_release": false,
+      "included_in_release": true,
       "requirements": [
         "fallback_when_netease_download_unavailable",
         "fallback_when_actual_quality_below_target",
@@ -269,7 +301,11 @@
         }
       },
       "implemented_on": "2026-10-09",
-      "release_target": "v2.8.0"
+      "release_target": "v2.8.0",
+      "released_on": "2026-10-09",
+      "release_tag": "v2.8.0",
+      "release_commit": "3e9c6cdb4f8e90416457dde9a3dc3984831b023b",
+      "release_url": "https://github.com/Surc/fnos_music_ext/releases/tag/v2.8.0"
     }
   ]
 }
