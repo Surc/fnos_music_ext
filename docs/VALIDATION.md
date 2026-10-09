@@ -1,6 +1,6 @@
 # 集成版验证记录（2026-10-09）
 
-以下 v2.7.1 历史证据对应功能 PR #1 合并提交 `0d5d2451d7acfa8f0162b89d628083d33f59c161`。v2.8.0 下载补源候选的验证单列在后文，旧结果不代表新增代码已验证。
+以下 v2.7.1 历史证据对应功能 PR #1 合并提交 `0d5d2451d7acfa8f0162b89d628083d33f59c161`。v2.8.0 下载补源的验证单列在后文，旧结果不代表新增代码已验证。
 
 ## GitHub 的实际结果
 
@@ -39,9 +39,9 @@ GitHub 验证前，在同一受限执行环境对原工程固定提交 `f036e1f`
 
 在实际 fnOS 设备分别确认：安装和旧版升级、管理页新设置、网易扫码、发现歌单和 FM、不同飞牛用户的每日推荐、原生搜索及手机播放、停止还原、卸载后的数据备份。只报告实际执行的结论，healthz 通过不等于在线歌曲一定可播放。
 
-## v2.8.0 下载补源候选（2026-10-09）
+## v2.8.0 下载补源（2026-10-09）
 
-分支 `feat/download-fallback`，基于 main `6a0a30d18c7828f59c068f2aa8411b098c153185` 独立实现；双来源采用 SHA 和维护 skill 1.0.0 未变。[PR #3](https://github.com/Surc/fnos_music_ext/pull/3) 的最终运行代码提交为 `8550ecd63dbd40b197ce2d741591916111971a04`，[完整 CI](https://github.com/Surc/fnos_music_ext/actions/runs/37921652490) 11 项全部成功。
+分支 `feat/download-fallback`，基于 main `6a0a30d18c7828f59c068f2aa8411b098c153185` 独立实现；双来源采用 SHA 和维护 skill 1.0.0 未变。[PR #3](https://github.com/Surc/fnos_music_ext/pull/3) 的最终运行代码提交为 `8550ecd63dbd40b197ce2d741591916111971a04`，[完整 CI](https://github.com/Surc/fnos_music_ext/actions/runs/37921652490) 11 项全部成功；合并提交 `981c6b19b0a27a7bb24020c3a0a01b0cce691570` 的 [main CI](https://github.com/Surc/fnos_music_ext/actions/runs/37922716170) 同样全部通过。发行仅调整说明与记录，运行代码保持相同。
 
 | 检查 | 当前实际结果 |
 | --- | --- |

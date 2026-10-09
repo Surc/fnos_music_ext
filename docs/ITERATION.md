@@ -15,10 +15,11 @@
 
 ## 已发布与继续开发
 
-- 开发版本：VERSION `2.8.0`（下载补源候选）；已发布版本：`2.7.1`。
-- 功能合并：[PR #1](https://github.com/Surc/fnos_music_ext/pull/1)，合并提交 `0d5d2451d7acfa8f0162b89d628083d33f59c161`。
-- 正式发行：[v2.7.1](https://github.com/Surc/fnos_music_ext/releases/tag/v2.7.1)，tag 固定在 `72df1bb053f9769ea13389fc7fffbe903f80541a`，含已更新的集成版文档。
-- 正式 FPK 的 SHA256：`33dc5dc28c714f016ae1c403519075ad727425fe9f543ce4ecb1675681506bd6`。以 Release 附件及其配套校验文件为准；不同构建的包字节可能不同。
+- VERSION `2.8.0`；本次发行目标 [v2.8.0](https://github.com/Surc/fnos_music_ext/releases/tag/v2.8.0)，正式附件及固定 tag 摘要在发行完成后记录到 SOURCE_VERSIONS.json。
+- v2.8.0 功能合并：[PR #3](https://github.com/Surc/fnos_music_ext/pull/3)，合并提交 `981c6b19b0a27a7bb24020c3a0a01b0cce691570`；[main CI](https://github.com/Surc/fnos_music_ext/actions/runs/37922716170) 11 项全部成功，Python 两版本各 857 passed。
+- v2.7.1 功能合并：[PR #1](https://github.com/Surc/fnos_music_ext/pull/1)，合并提交 `0d5d2451d7acfa8f0162b89d628083d33f59c161`。
+- 历史正式发行：[v2.7.1](https://github.com/Surc/fnos_music_ext/releases/tag/v2.7.1)，tag 固定在 `72df1bb053f9769ea13389fc7fffbe903f80541a`，含已更新的集成版文档。
+- v2.7.1 正式 FPK 的 SHA256：`33dc5dc28c714f016ae1c403519075ad727425fe9f543ce4ecb1675681506bd6`。以 Release 附件及其配套校验文件为准；不同构建的包字节可能不同。
 - 本次追加来源与维护资料进入后续 main，现有发布快照可从 tag 独立复现。通过 [验证记录](VALIDATION.md) 查看功能 PR 的 11 项 CI 与两版本 Python 各 807 passed 的证据。
 - 发布提交的 [CI](https://github.com/Surc/fnos_music_ext/actions/runs/37907664958) 与 [Release 工作流](https://github.com/Surc/fnos_music_ext/actions/runs/37908174138) 均成功。fnOS 实机安装、升级和真实账号在线播放仍待验收。
 
@@ -50,7 +51,7 @@
 
 ## 本次独立实现：网易云下载的跨平台补源
 
-状态：`implemented`。功能见 [PR #3](https://github.com/Surc/fnos_music_ext/pull/3)，实现分支 `feat/download-fallback`；已验证代码提交 `8550ecd63dbd40b197ce2d741591916111971a04` 的 [完整 CI](https://github.com/Surc/fnos_music_ext/actions/runs/37921652490) 11 项全部成功，Python 3.11 / 3.13 各 857 passed，包含真实容器契约与 FPK 构建校验。当前为 v2.8.0 开发候选，尚未进入任何 Release；真实账号与 NAS 验收待完成。用户目标为：网易云因账号权益不可下载，或只有低于目标音质的资源时，自动尝试其他平台的同一首歌。
+状态：`implemented`。功能见 [PR #3](https://github.com/Surc/fnos_music_ext/pull/3)，实现分支 `feat/download-fallback`；已验证代码提交 `8550ecd63dbd40b197ce2d741591916111971a04` 的 [完整 CI](https://github.com/Surc/fnos_music_ext/actions/runs/37921652490) 11 项全部成功，Python 3.11 / 3.13 各 857 passed，包含真实容器契约与 FPK 构建校验。本次随 v2.8.0 发行，正式 tag 与资产摘要在发行完成后登记；真实账号与 NAS 验收待完成。用户目标为：网易云因账号权益不可下载，或只有低于目标音质的资源时，自动尝试其他平台的同一首歌。
 
 ### v2.7.1 的已有行为
 
@@ -60,7 +61,7 @@
 
 两个 main 的 head 仍是本文件的采用基线。javycoder 的 [#39](https://github.com/javycoder/fnos_music_ext/issues/39#issuecomment-6064611243) 作者表示以后再试、目前仍一个音源；[#47](https://github.com/javycoder/fnos_music_ext/issues/47) 提出失败切源与目录需求，但未发现对应实现 PR 或确定版本承诺。其 dev 没有新增补源实现，Automatic_iteration 分支是旧搜索重试工作；gzywd 当前代码主要面向单一网易源。用户要求我们自己实现，因此本次以现有 musicdl API 适配独立下载链路，没有从上游推进采用 SHA。
 
-### v2.8.0 候选实现
+### v2.8.0 实现
 
 - `proxy/download_fallback.py`：配置、严格同曲匹配、全文件下载、实际编码 / 时长 / 解码验证、策略和来源伴随文件。
 - `proxy/app.py`：手动下载及后台整轨保存接入；按 GUID 去重、限流、失败冷却及配置变化取消；低档缓存不阻止重新检查网易权益，真实扩展名及完整路径引用避免旧 MP3 遮住升级后的 FLAC。用户官方绑定仍使用各自请求凭证。
