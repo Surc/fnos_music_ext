@@ -2,6 +2,8 @@
 
 本项目是 Surc/fnos_music_ext v2.7.1，保留原工程完整 Git 历史，基于 javycoder/fnos_music_ext v2.7.0 开发。功能使用见 [PERSONALIZATION.md](PERSONALIZATION.md)，安装见 [INSTALL.md](INSTALL.md)。
 
+双来源的分支、VERSION、真实 tag、完整提交、采用范围、正式发行摘要与 skill 数据统一记录在 [SOURCE_VERSIONS.json](../SOURCE_VERSIONS.json)。本次快照、下一版待办与更新记录步骤见 [ITERATION.md](ITERATION.md)，Agent 从 [AGENTS.md](../AGENTS.md) 接续。参考工程 2.9.30 来自 VERSION 文件；查询 v2.9.30 tag 返回 404，因此按 SHA 锁定。
+
 | 来源 | 固定提交 | 使用范围 |
 | --- | --- | --- |
 | https://github.com/javycoder/fnos_music_ext | `f036e1f7082363c5f5e4892d15209ce584b0769b` | 代理、三音源单选、AI 推荐、原生收藏/历史、管理页、Docker 和 FPK 基础 |
@@ -27,6 +29,7 @@ git remote add reference https://github.com/gzywd/fnos_music_ext.git
 - `reference` 远端：`https://github.com/gzywd/fnos_music_ext.git`，用作后续功能参考。
 - `origin`：你自己的 GitHub 仓库。
 - 保留原工程历史，以普通 merge 更新，不重建仓库、不 squash 上游历史、不强推 main。
+- 将两条 main 的最后检查提交与实际已合并 / 已移植提交分开记录。完成变更进入本项目主分支后保留旧基线、追加采用记录，再推进来源清单；检查或下载新版本不表示已经采用。
 
 ## GitHub 上更新
 

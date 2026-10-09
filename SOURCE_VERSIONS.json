@@ -1,0 +1,213 @@
+{
+  "schema_version": 1,
+  "recorded_on": "2026-10-09",
+  "timezone": "Asia/Shanghai",
+  "project": {
+    "repository": "https://github.com/Surc/fnos_music_ext",
+    "default_branch": "main",
+    "version": "2.7.1",
+    "app_id": "fnmusic-ext",
+    "context_entry": "AGENTS.md",
+    "iteration_document": "docs/ITERATION.md"
+  },
+  "sources": [
+    {
+      "id": "upstream",
+      "repository": "https://github.com/javycoder/fnos_music_ext",
+      "git_remote": "upstream",
+      "default_branch": "main",
+      "tracking_branch": "main",
+      "version_file": "VERSION",
+      "baseline": {
+        "version": "2.7.0",
+        "commit": "f036e1f7082363c5f5e4892d15209ce584b0769b",
+        "committed_at": "2026-10-08T16:32:03Z",
+        "tag": "v2.7.0",
+        "tag_object": "c61a0c6dd3e394c482572f99bdf97c1520e808f1",
+        "tag_type": "annotated"
+      },
+      "last_integrated_commit": "f036e1f7082363c5f5e4892d15209ce584b0769b",
+      "integration_mode": "git_merge_preserving_history",
+      "scope": [
+        "proxy_and_playback",
+        "mutually_exclusive_primary_sources",
+        "native_favorites_and_history",
+        "ai_recommendation",
+        "webui",
+        "docker",
+        "fpk_lifecycle"
+      ],
+      "last_observed_head": {
+        "checked_on": "2026-10-09",
+        "commit": "f036e1f7082363c5f5e4892d15209ce584b0769b",
+        "version": "2.7.0"
+      },
+      "last_integrated_version": "2.7.0"
+    },
+    {
+      "id": "reference",
+      "repository": "https://github.com/gzywd/fnos_music_ext",
+      "git_remote": "reference",
+      "default_branch": "main",
+      "tracking_branch": "main",
+      "version_file": "VERSION",
+      "baseline": {
+        "version": "2.9.30",
+        "commit": "08b0b23486d289619ab73575f42aa0d20e78c2b3",
+        "committed_at": "2026-09-16T02:03:15Z",
+        "tag": null,
+        "tag_lookup": {
+          "ref": "refs/tags/v2.9.30",
+          "http_status": 404,
+          "checked_on": "2026-10-09"
+        }
+      },
+      "last_ported_commit": "08b0b23486d289619ab73575f42aa0d20e78c2b3",
+      "integration_mode": "selected_semantic_port",
+      "reference_files": [
+        "proxy/playlists.py",
+        "musicbox-service/netease_ext.py"
+      ],
+      "scope": [
+        "discovery_channels_and_order",
+        "cache_design",
+        "personalized_playlist_api",
+        "private_fm_api",
+        "category_playlists_api",
+        "new_album_api"
+      ],
+      "whole_branch_merged": false,
+      "last_observed_head": {
+        "checked_on": "2026-10-09",
+        "commit": "08b0b23486d289619ab73575f42aa0d20e78c2b3",
+        "version": "2.9.30"
+      },
+      "last_ported_version": "2.9.30"
+    }
+  ],
+  "integrations": [
+    {
+      "recorded_on": "2026-10-09",
+      "project_version": "2.7.1",
+      "merge_commit": "0d5d2451d7acfa8f0162b89d628083d33f59c161",
+      "pull_request": "https://github.com/Surc/fnos_music_ext/pull/1",
+      "sources": {
+        "upstream": "f036e1f7082363c5f5e4892d15209ce584b0769b",
+        "reference": "08b0b23486d289619ab73575f42aa0d20e78c2b3"
+      },
+      "implemented_modules": [
+        "proxy/discovery.py",
+        "proxy/personalization.py",
+        "musicbox-service/discovery.py"
+      ],
+      "reference_scope": "selected_semantic_port",
+      "notes": "Per-fnOS-user local profile ranking added in this integration; NetEase account remains shared at NAS level."
+    }
+  ],
+  "releases": [
+    {
+      "version": "2.7.1",
+      "tag": "v2.7.1",
+      "commit": "72df1bb053f9769ea13389fc7fffbe903f80541a",
+      "url": "https://github.com/Surc/fnos_music_ext/releases/tag/v2.7.1",
+      "published_at": "2026-10-09T08:57:20Z",
+      "assets": [
+        {
+          "name": "fnmusic-ext-2.7.1.fpk",
+          "size_bytes": 27092456,
+          "sha256": "33dc5dc28c714f016ae1c403519075ad727425fe9f543ce4ecb1675681506bd6"
+        },
+        {
+          "name": "fnmusic-ext-2.7.1.fpk.sha256",
+          "size_bytes": 88,
+          "sha256": "0f5044b803e996df6a4b9f08141ccad3c568fafd4274556c1b9007c6af8f28f3"
+        },
+        {
+          "name": "fnos_music_ext-2.7.1-source.zip",
+          "size_bytes": 7027705,
+          "sha256": "21b3013c325b752e2ee92c5f96cd78adb202a8873ec021547152c673076618c3"
+        }
+      ],
+      "ci": {
+        "url": "https://github.com/Surc/fnos_music_ext/actions/runs/37907664958",
+        "conclusion": "success"
+      },
+      "release_workflow": {
+        "url": "https://github.com/Surc/fnos_music_ext/actions/runs/37908174138",
+        "conclusion": "success"
+      },
+      "nas_acceptance": "pending"
+    }
+  ],
+  "toolchain": {
+    "ci_python_versions": [
+      "3.11",
+      "3.13"
+    ],
+    "production_python": "3.13",
+    "ci_node": "22",
+    "fnpack_version": "1.2.3",
+    "lxserver": {
+      "tag": "v2.1.2",
+      "artifact": "lx-music-sync-server-v2.1.2-server.zip",
+      "sha256": "1f89639366a7d0f968bfb0e56d88701a60d500a555afd52ae2cc7e5ff4742a63",
+      "canonical_file": "container/lxserver.version"
+    },
+    "python_dependency_specs": {
+      "musicdl": {
+        "requirement": "musicdl>=2.14.0",
+        "file": "musicdl-service/requirements.txt",
+        "exact_release_version_locked": false
+      },
+      "musicbox": {
+        "requirement": "NetEase-MusicBox>=0.5.3",
+        "file": "musicbox-service/requirements.txt",
+        "offline_contract_tested_version": "0.5.3",
+        "exact_release_version_locked": false
+      }
+    }
+  },
+  "skills": [
+    {
+      "name": "maintain-fnos-music",
+      "version": "1.0.0",
+      "repository_path": "skills/maintain-fnos-music",
+      "format": "SKILL.md name/description YAML frontmatter plus agents/openai.yaml",
+      "authoring_guidance": "skill-creator",
+      "context_files": [
+        "AGENTS.md",
+        "SOURCE_VERSIONS.json",
+        "docs/ITERATION.md",
+        "docs/UPSTREAM.md",
+        "docs/PERSONALIZATION.md",
+        "docs/VALIDATION.md"
+      ],
+      "distribution": [
+        "repository",
+        "personal_skills"
+      ],
+      "files": {
+        "SKILL.md": "38af32b0568d4b18372c0ca86262226a8933dfb9a3695b3df0180f8e7d83abb7",
+        "agents/openai.yaml": "02794f2bf656d89e4828fb83d9c0f8bcd639a267aa041574d130b9e158e097dc"
+      }
+    }
+  ],
+  "planned_work": [
+    {
+      "id": "netease-cross-platform-download-fallback",
+      "status": "planned",
+      "requested_on": "2026-10-09",
+      "included_in_release": false,
+      "requirements": [
+        "fallback_when_netease_download_unavailable",
+        "fallback_when_actual_quality_below_target",
+        "match_title_artist_version_and_duration",
+        "record_actual_provider_and_quality",
+        "configurable_strict_quality_or_downgrade",
+        "preserve_primary_provider_selection",
+        "reject_wrong_versions_or_preview_only_candidates"
+      ],
+      "design_document": "docs/ITERATION.md"
+    }
+  ]
+}

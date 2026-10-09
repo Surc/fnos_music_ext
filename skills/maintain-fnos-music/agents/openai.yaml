@@ -1,0 +1,4 @@
+interface:
+  display_name: "飞牛音乐项目维护"
+  short_description: "维护 fnOS 音乐集成版：核对双来源基线、验证 FPK 并记录后续迭代"
+  default_prompt: "使用 $maintain-fnos-music 核对 Surc/fnos_music_ext 的双来源版本和当前发布记录，完成本次迭代并验证 FPK。"
