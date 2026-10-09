@@ -39,6 +39,7 @@ try:
     from . import nmplaylists as nmpl
     from . import discovery
     from . import transcode as tc
+    from . import download_fallback as df
     from .cache_gc import purge_rolling, sweep_orphan_lyrics
     from .env_merge import parse_env_file
     from .version import get_version
@@ -47,6 +48,7 @@ except ImportError:  # uvicorn --app-dir proxy
     import nmplaylists as nmpl  # type: ignore
     import discovery  # type: ignore
     import transcode as tc  # type: ignore
+    import download_fallback as df  # type: ignore
     from cache_gc import purge_rolling, sweep_orphan_lyrics  # type: ignore
     from env_merge import parse_env_file  # type: ignore
     from version import get_version  # type: ignore
@@ -538,6 +540,13 @@ _ENV_WATCH_KEYS: dict[str, tuple[str, str]] = {
 }
 _ENV_WATCH_INTERVAL_S = 2.0
 _ENV_WATCH_DEBOUNCE_S = 0.5
+_FALLBACK_CONF_KEYS = set()
+for _suffix in df.HOT_KEYS:
+    _env_key = df.ENV_PREFIX + _suffix
+    _conf_key = "download_fallback_" + _suffix.lower()
+    _ENV_WATCH_KEYS[_env_key] = (_conf_key, "str")
+    CONF[_conf_key] = os.environ.get(_env_key, "")
+    _FALLBACK_CONF_KEYS.add(_conf_key)
 
 
 def _env_watch_path() -> str:
@@ -662,6 +671,8 @@ async def _env_watch_loop() -> None:
             changed = apply_env_hot_reload()
             if changed:
                 _reset_search_cache()
+                if (_SOURCE_CONF_KEYS | _FALLBACK_CONF_KEYS) & set(changed):
+                    await _cancel_fallback_downloads(reset_cooldown=True)
                 if _SOURCE_CONF_KEYS & set(changed):
                     # issue #22：切换音源后当日推荐立即失效，切回歌单按新音源重建，
                     # 旧源曲目不再残留到当日结束
@@ -1165,9 +1176,9 @@ def _path_stem(path: str) -> str:
     return path
 
 
-def remember_media_path(guid: str, media_path: str) -> None:
-    """记住曲库里的文件词干（不含扩展名），音频和 .lrc 共用。"""
-    stem = _path_stem(media_path)
+def remember_media_path(guid: str, media_path: str, *, exact: bool = False) -> None:
+    """记住文件词干；已校验的补源版本可记完整路径，防止旧 MP3 遮住新 FLAC。"""
+    stem = media_path if exact else _path_stem(media_path)
     try:
         os.makedirs(CONF["cache_dir"], exist_ok=True)
         with open(media_ref_path(guid), "w", encoding="utf-8") as f:
@@ -1195,6 +1206,15 @@ def recalled_media_stem(guid: str) -> str | None:
 
 
 def recalled_media_path(guid: str) -> str | None:
+    # New supplement downloads retain the exact rendition. Legacy stem refs still work.
+    try:
+        with open(media_ref_path(guid), encoding="utf-8") as file:
+            exact = file.read().strip()
+        if (os.path.splitext(exact)[1].lstrip(".").lower() in CACHE_EXTS
+                and os.path.isfile(exact) and os.path.getsize(exact) > 0):
+            return exact
+    except OSError:
+        pass
     stem = recalled_media_stem(guid)
     if not stem:
         return None
@@ -2916,6 +2936,7 @@ async def lifespan(fastapi_app: FastAPI):
     try:
         yield
     finally:
+        await _cancel_fallback_downloads()
         if discovery_task:
             discovery_task.cancel()
             await asyncio.gather(discovery_task, return_exceptions=True)
@@ -3624,7 +3645,8 @@ def _tee_finalize(part: str, guid: str, ext: str, info: dict | None, tee_enabled
     无损档解码校验不过直接丢弃（上游损坏流绝不入库）并拉黑该 guid。
     返回实际落盘元数据 {"dest","title","artist","album"}（官方绑定按此匹配官方曲库）。
     """
-    if str(ext or "").lower() in _LOSSLESS_EXTS and not _audio_file_ok(part):
+    previously_checked = bool((info or {}).get("download_provenance", {}).get("audio", {}).get("complete_decode_checked"))
+    if str(ext or "").lower() in _LOSSLESS_EXTS and not previously_checked and not _audio_file_ok(part):
         _lossless_blacklist(guid)
         logger.warning("tee finalize rejected corrupt lossless for %s", guid)
         try:
@@ -3638,7 +3660,15 @@ def _tee_finalize(part: str, guid: str, ext: str, info: dict | None, tee_enabled
         title, artist, album = _tee_metadata_fallback(guid, title, artist, album, src)
         dest = library_media_path(guid, title, ext, artist=artist, directory=tee_save_dir())
         os.replace(part, dest)
-        remember_media_path(guid, dest)
+        if src.get("download_provenance"):
+            df.write_provenance(dest, src["download_provenance"])
+        elif os.path.isfile(dest + ".fnmusic-source.json"):
+            # The replaced bytes no longer have the old file's provider provenance.
+            os.unlink(dest + ".fnmusic-source.json")
+        if src.get("download_provenance"):
+            remember_media_path(guid, dest, exact=True)
+        else:
+            remember_media_path(guid, dest)
         adopt_library_perms(dest)
         write_audio_tags(dest, title, artist, album)
         # 自动下载封面：音乐文件已完整落库才走到这里（下载失败根本进不了
@@ -3845,6 +3875,7 @@ def stream_tee_response(
                         if meta and tee_enabled:
                             # 官方绑定意图（收藏/歌单）统一在下载落库完成后调度
                             _dispatch_official_binding(guid, scan_headers, meta)
+                            _schedule_fallback_check(guid, scan_headers or {})
                     except Exception as exc:
                         logger.warning("tee finalize execution failed for %s: %s", guid, type(exc).__name__)
                         if os.path.exists(to_finalize):
@@ -4119,6 +4150,7 @@ def _register_fav_autobind(request: Request, guid: str, user_guid: str = "",
         _register_bind_intent(guid, user_guid, headers, playlist_guid)
     if find_cache_file(guid):
         _dispatch_official_binding(guid, headers, None)
+        _schedule_fallback_check(guid, headers)
         return
     _register_background_fetch(request, guid, "fav_auto_bind")
 
@@ -4154,7 +4186,7 @@ async def _info_for_background_save(request: Request, guid: str, info: dict | No
     return base
 
 
-async def _full_fetch_download(guid: str, cred_headers: dict, force_mp3: bool = False) -> None:
+async def _full_fetch_download_primary(guid: str, cred_headers: dict, force_mp3: bool = False) -> None:
     """后台整轨下载 online guid 并落盘（独立于客户端连接，不占播放路径预算）。
 
     无损档解码校验失败时按 guid 拉黑并自动以 mp3 档重试一次（服务端
@@ -4203,7 +4235,7 @@ async def _full_fetch_download(guid: str, cred_headers: dict, force_mp3: bool = 
                 resp = owned = None
             if not force_mp3:
                 logger.warning("retrying %s with mp3 tier after corrupt lossless stream", guid)
-                await _full_fetch_download(guid, cred_headers, force_mp3=True)
+                await _full_fetch_download_primary(guid, cred_headers, force_mp3=True)
                 return
             raise RuntimeError("corrupt stream even at mp3 tier")
         meta = await asyncio.to_thread(_tee_finalize, part, guid, ext, info or {}, True)
@@ -4230,6 +4262,172 @@ async def _full_fetch_download(guid: str, cred_headers: dict, force_mp3: bool = 
                 await owned.aclose()
         if _full_fetch_tasks.get(guid) is asyncio.current_task():
             del _full_fetch_tasks[guid]
+
+
+_fallback_download_jobs: dict[str, asyncio.Task] = {}
+_fallback_download_slots = None
+
+
+async def _cancel_fallback_downloads(*, reset_cooldown: bool = False) -> None:
+    jobs = list(_fallback_download_jobs.values())
+    for job in jobs:
+        job.cancel()
+    if jobs:
+        await asyncio.gather(*jobs, return_exceptions=True)
+    _fallback_download_jobs.clear()
+    if reset_cooldown:
+        # A new quality/provider policy is a new attempt, not a repeat of the old failure.
+        for guid in list(_full_fetch_failed):
+            if guid.startswith("online:netease:"):
+                _full_fetch_failed.pop(guid, None)
+
+
+def _schedule_fallback_check(guid: str, headers: dict) -> None:
+    if not df.enabled_for(guid, CONF):
+        return
+    old = _full_fetch_tasks.get(guid)
+    if old and not old.done():
+        return
+    if time.monotonic() - _full_fetch_failed.get(guid, -_FULL_FETCH_COOLDOWN_S) < _FULL_FETCH_COOLDOWN_S:
+        return
+    _full_fetch_tasks[guid] = asyncio.create_task(_full_fetch_download(guid, headers))
+
+
+async def _download_reference(request: Request, guid: str, info: dict | None = None) -> dict:
+    retained, _ = _retained_track(request, guid)
+    merged = dict(retained or {})
+    merged.update(info or {})
+    merged = await _info_for_background_save(request, guid, merged)
+    title, artist, album = _tag_fields(merged)
+    merged.update(title=title, artist=artist, album=album)
+    if not (title and artist and df.duration(merged)):
+        fetched = await _fetch_online_info(request, guid, include_lyric=False)
+        if fetched:
+            merged.update(fetched)
+    return merged
+
+
+async def _download_netease_candidate(request: Request, guid: str, info: dict,
+                                     settings: df.Settings) -> df.Download | None:
+    opened = await _open_online_stream(request, guid, None)
+    if not opened:
+        return None
+    resp, owned, _ext, opened_info, chunks, first = opened
+    try:
+        merged = dict(info)
+        merged.update(opened_info or {})
+        merged = await _download_reference(request, guid, merged)
+        return await df.consume_stream(resp, chunks, first, tee_save_dir(), merged, "netease",
+                                       song_id_from_online_guid(guid).split(":")[-1], settings)
+    finally:
+        with anyio.CancelScope(shield=True):
+            await resp.aclose()
+            if owned:
+                await owned.aclose()
+
+
+async def _download_with_fallback(guid: str, cred_headers: dict, settings: df.Settings) -> dict | None:
+    global _fallback_download_slots
+    if _fallback_download_slots is None:
+        _fallback_download_slots = asyncio.Semaphore(2)
+    selected = None
+    primary = None
+    try:
+        async with asyncio.timeout(settings.budget_s), _fallback_download_slots:
+            request = _synth_request(cred_headers)
+            info = await _download_reference(request, guid)
+            existing = find_cache_file(guid)
+            if existing:
+                try:
+                    audio = await asyncio.to_thread(df.inspect_audio, existing)
+                    if df.duration_matches(df.duration(info), audio["duration_s"]):
+                        if df.meets_target(audio, settings.target):
+                            title, artist, album = _tag_fields(info)
+                            return {"dest": existing, "title": title, "artist": artist, "album": album}
+                        primary = df.Download(existing, info, audio, "unknown_existing", "", owned=False)
+                except (ValueError, OSError, subprocess.SubprocessError, RuntimeError):
+                    pass
+            if primary is None:
+                try:
+                    primary = await _download_netease_candidate(request, guid, info, settings)
+                except (httpx.HTTPError, ValueError, OSError, subprocess.SubprocessError, RuntimeError):
+                    primary = None
+            if primary and df.meets_target(primary.audio, settings.target):
+                selected = primary
+                trigger = "netease_priority"
+            else:
+                trigger = "below_target" if primary else "netease_unavailable"
+                socket_path = os.environ.get(df.ENV_PREFIX + "CONTROL_SOCKET") or os.path.join(
+                    _HOME, "sources-data", "download-fallback.sock")
+                fallback_url = os.environ.get(df.ENV_PREFIX + "URL", "http://127.0.0.1:8776")
+                try:
+                    async with df.standby(socket_path), httpx.AsyncClient(base_url=fallback_url) as client:
+                        selected = await df.choose_fallback(client, info, tee_save_dir(), settings, primary)
+                except (OSError, RuntimeError, httpx.HTTPError, ValueError):
+                    selected = primary if settings.allow_downgrade else None
+            if selected is None:
+                raise RuntimeError("no matching complete audio meets download policy")
+            if not df.enabled_for(guid, CONF) or settings != df.Settings.current():
+                raise RuntimeError("download configuration changed")
+            if not selected.owned:
+                title, artist, album = _tag_fields(selected.info)
+                return {"dest": selected.path, "title": title, "artist": artist, "album": album}
+            saved_info = dict(selected.info)
+            # Keep the NetEase presentation identity, record the actual downloaded identity separately.
+            saved_info.update({key: info[key] for key in ("title", "artist", "album") if info.get(key)})
+            saved_info["download_provenance"] = selected.provenance(guid, settings, trigger)
+            finalizer = asyncio.create_task(asyncio.to_thread(_tee_finalize, selected.path, guid,
+                                                             selected.audio["ext"], saved_info, True))
+            try:
+                meta = await asyncio.shield(finalizer)
+            except asyncio.CancelledError:
+                await finalizer
+                raise
+            if not meta:
+                raise RuntimeError("download finalization failed")
+            _full_fetch_failed.pop(guid, None)
+            return meta
+    except asyncio.CancelledError:
+        raise
+    except Exception as exc:
+        _full_fetch_failed[guid] = time.monotonic()
+        logger.warning("Download fallback failed for %s: %s", guid, type(exc).__name__)
+        return None
+    finally:
+        if selected:
+            selected.discard()
+        if primary and primary is not selected:
+            primary.discard()
+
+
+async def _full_fetch_download(guid: str, cred_headers: dict, force_mp3: bool = False) -> dict | None:
+    if not df.enabled_for(guid, CONF):
+        await _full_fetch_download_primary(guid, cred_headers, force_mp3)
+        return None
+    job = _fallback_download_jobs.get(guid)
+    if job is None or job.done():
+        if len(_fallback_download_jobs) >= 8 or time.monotonic() - _full_fetch_failed.get(
+                guid, -_FULL_FETCH_COOLDOWN_S) < _FULL_FETCH_COOLDOWN_S:
+            return None
+        job = asyncio.create_task(_download_with_fallback(guid, cred_headers, df.Settings.current()))
+        _fallback_download_jobs[guid] = job
+        def clear_finished(done):
+            if _fallback_download_jobs.get(guid) is done:
+                _fallback_download_jobs.pop(guid, None)
+        job.add_done_callback(clear_finished)
+    try:
+        meta = await asyncio.shield(job)
+        if meta:
+            request = _synth_request(cred_headers)
+            await _auto_lyric_after_finalize(request, guid, meta)
+            _schedule_library_scan(cred_headers)
+            _dispatch_official_binding(guid, cred_headers, meta)
+        return meta
+    finally:
+        if job.done() and _fallback_download_jobs.get(guid) is job:
+            _fallback_download_jobs.pop(guid, None)
+        if _full_fetch_tasks.get(guid) is asyncio.current_task():
+            _full_fetch_tasks.pop(guid, None)
 
 
 # === 边听边存 tee 活跃跟踪 + 切歌续传交接 ===
@@ -4363,6 +4561,8 @@ async def _resume_part_download(guid: str, part: str, written: int, expected: in
         await _auto_lyric_after_finalize(fake_request, guid, meta)
         _schedule_library_scan(cred_headers)
         _dispatch_official_binding(guid, cred_headers, meta)
+        # Do not splice another provider into resumed bytes; upgrade only after the old file is complete.
+        asyncio.get_running_loop().call_soon(_schedule_fallback_check, guid, cred_headers)
         return True
     finally:
         with anyio.CancelScope(shield=True):
@@ -5237,13 +5437,18 @@ async def _dl_produce(task: dict, cred_headers: dict) -> None:
     guid = task["guid"]
     try:
         src = find_cache_file(guid)
-        if not src and _source_enabled(guid):
+        if df.enabled_for(guid, CONF) and _source_enabled(guid):
+            # A previously retained lower-quality file must not bypass a strict download policy.
+            meta = await _full_fetch_download(guid, cred_headers)
+            src = str((meta or {}).get("dest") or "") or None
+        elif not src and _source_enabled(guid):
             # 无本地文件：先走整轨下载管线（带元数据命名/落库，与边听边存同款）
             await _full_fetch_download(guid, cred_headers)
             src = find_cache_file(guid)
         if not src:
             task["state"] = "failed"
-            task["errmsg"] = "online source unavailable"
+            task["errmsg"] = ("未找到满足下载策略的完整匹配音频，请检查目标音质与备用平台"
+                              if df.enabled_for(guid, CONF) else "online source unavailable")
             return
         if task.get("quality") == "original" or os.path.splitext(src)[1].lower() == ".mp3":
             task["path"] = src
