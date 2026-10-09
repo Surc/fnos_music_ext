@@ -1,6 +1,6 @@
 # 集成版安装、升级与部署指南
 
-适用于 [Surc/fnos_music_ext](https://github.com/Surc/fnos_music_ext) v2.7.1。本版增加网易云发现、私人 FM 和每个飞牛用户自己的历史 / 收藏画像。功能设置见 [发现与推荐说明](PERSONALIZATION.md)，打包与原工程更新见 [UPSTREAM.md](UPSTREAM.md)。
+适用于 [Surc/fnos_music_ext](https://github.com/Surc/fnos_music_ext)。正式 Release v2.7.1 增加网易云发现、私人 FM 和每个飞牛用户自己的历史 / 收藏画像；开发版本 v2.8.0 候选增加 [网易下载跨平台补源](DOWNLOAD_FALLBACK.md)，尚未发布。功能设置见 [发现与推荐说明](PERSONALIZATION.md)，打包与原工程更新见 [UPSTREAM.md](UPSTREAM.md)。
 
 适用环境：飞牛 NAS（fnOS）已安装并启动「飞牛音乐」官方应用。本项目采用无侵入接管设计，**完全不修改**飞牛官方 nginx 配置、不 Patch 官方二进制、不改动官方数据库。
 
@@ -34,7 +34,7 @@ chmod +x install.sh extend.sh restore.sh proxy/run_proxy.sh
 v2.0.0 起部署形态固定为两部分：
 
 1. **核心代理（宿主机 systemd）**：`fnmusic-ext.service` 运行在项目内独立虚拟环境 `.venv-proxy`，负责零侵入接管 `/var/run/trim_music.socket`。核心代理必须在宿主机运行——塞入容器会面临跨容器 socket 权限穿透问题。
-2. **音源单容器（Docker）**：`fnmusic-sources` 一个容器内含 musicdl / musicbox / lxmusic / WebUI 四个程序（supervisor 管理），**按 `.env` 只启动当前所选音源进程**，其余不驻留内存。运行期切源在 WebUI 内完成（写配置 + 同容器秒级 stop/start），无需重建容器。
+2. **音源单容器（Docker）**：`fnmusic-sources` 由 supervisor 管理 musicdl / musicbox / lxmusic / WebUI 与辅助程序，**按 `.env` 启动当前主音源**。v2.8.0 候选开启补源时另启轻量控制服务，独立 musicdl 备用进程仅下载时启动、空闲后停止。运行期切源在 WebUI 内完成（写配置 + 同容器 stop/start）。升级到含新辅助模块 / 端口的版本需执行正常 FPK 升级或 `install.sh` 重建容器。
 
 | 端口 | 绑定地址 | 用途 |
 | :--- | :--- | :--- |
@@ -42,6 +42,7 @@ v2.0.0 起部署形态固定为两部分：
 | 8770 | 127.0.0.1 | musicbox 音源（仅本机；扫码走已登录的管理页） |
 | 8772 | 127.0.0.1 | lxmusic 音源（仅代理访问） |
 | 8774 | 127.0.0.1 | 管理 WebUI（仅本机；浏览器走飞牛网关，仅管理员） |
+| 8776 | 127.0.0.1 | v2.8.0 候选下载补源，按需启动（仅代理访问） |
 
 数据卷：项目目录 `sources-data/`（网易登录态、洛雪源脚本缓存与状态）；仓库目录挂载到容器 `/repo`（WebUI 读写 `.env` 用）。容器无特权、不挂 docker.sock。
 
@@ -62,6 +63,8 @@ v2.0.0 起部署形态固定为两部分：
 应用 ID 沿用 `fnmusic-ext`，直接在应用中心安装本版作为同应用升级。升级会备份并恢复原有 `.env`、网易云登录、收藏、播放历史等数据；不要并行部署另一份代理。已有自定义开关值会保留，升级后请检查「播放与推荐」的新设置。新键缺失时可在管理页开启并保存，不要直接用 `.env.example` 覆盖现有配置。
 
 家庭成员的飞牛画像独立，网易云发现仍使用 NAS 上共享的扫码账号；并未增加逐用户绑定网易账号。私人歌单、推荐和 FM 需要有效网易云登录。
+
+下载补源升级后默认关闭，在「边听边存」显式开启。保存位置沿用同页「保存路径」，可填写 NAS 文件系统目录；留空优先官方共享音乐库目录，否则落扩展缓存。开启不改变网易曲目列表的权限过滤。目标、降级策略与来源文件说明见 [DOWNLOAD_FALLBACK.md](DOWNLOAD_FALLBACK.md)。
 
 日常启停在应用中心完成：「停止」秒级还原官方直连，「启动」恢复扩展。卸载会先自动备份配置与数据到存储卷根目录（`fnmusic-ext-backup-<时间戳>.tar.gz`）再清理。
 

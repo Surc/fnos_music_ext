@@ -15,7 +15,7 @@
 
 ## 已发布与继续开发
 
-- 集成版本：VERSION `2.7.1`。
+- 开发版本：VERSION `2.8.0`（下载补源候选）；已发布版本：`2.7.1`。
 - 功能合并：[PR #1](https://github.com/Surc/fnos_music_ext/pull/1)，合并提交 `0d5d2451d7acfa8f0162b89d628083d33f59c161`。
 - 正式发行：[v2.7.1](https://github.com/Surc/fnos_music_ext/releases/tag/v2.7.1)，tag 固定在 `72df1bb053f9769ea13389fc7fffbe903f80541a`，含已更新的集成版文档。
 - 正式 FPK 的 SHA256：`33dc5dc28c714f016ae1c403519075ad727425fe9f543ce4ecb1675681506bd6`。以 Release 附件及其配套校验文件为准；不同构建的包字节可能不同。
@@ -48,13 +48,26 @@
 
 完整命令与冲突规则见 [UPSTREAM.md](UPSTREAM.md)。`--check-git` 需要完整 Git 历史与 reference 基线对象；执行 `git fetch origin --tags`、`git fetch upstream main`、`git fetch reference main` 后使用。
 
-## 待实现：网易云下载的跨平台补源
+## 本次独立实现候选：网易云下载的跨平台补源
 
-状态：`planned`，尚未进入 v2.7.1。用户目标为：网易云因账号权益不可下载，或只有低于目标音质的资源时，自动尝试其他平台的同一首歌。
+状态：`planned`（已写入 v2.8.0 候选分支，完整 CI 与容器契约尚待验证），尚未进入任何 Release。用户目标为：网易云因账号权益不可下载，或只有低于目标音质的资源时，自动尝试其他平台的同一首歌。
 
-### 已有行为
+### v2.7.1 的已有行为
 
 `proxy/app.py::resolve_netease_url` 只在网易云内部按音质档序尝试，缺省高音质模式从 lossless 向下重试。`_open_online_stream` 与 `_full_fetch_download` 根据曲目原 source 取流，下载失败没有跨平台重搜。容器和管理页按一个主音源运行；现有 musicdl 搜索、元数据、流 API 可作为补源基础，但需要补充生命周期和下载路由。
+
+### 上游计划核对（2026-10-09）
+
+两个 main 的 head 仍是本文件的采用基线。javycoder 的 [#39](https://github.com/javycoder/fnos_music_ext/issues/39#issuecomment-6064611243) 作者表示以后再试、目前仍一个音源；[#47](https://github.com/javycoder/fnos_music_ext/issues/47) 提出失败切源与目录需求，但未发现对应实现 PR 或确定版本承诺。其 dev 没有新增补源实现，Automatic_iteration 分支是旧搜索重试工作；gzywd 当前代码主要面向单一网易源。用户要求我们自己实现，因此本次以现有 musicdl API 适配独立下载链路，没有从上游推进采用 SHA。
+
+### v2.8.0 候选实现
+
+- `proxy/download_fallback.py`：配置、严格同曲匹配、全文件下载、实际编码 / 时长 / 解码验证、策略和来源伴随文件。
+- `proxy/app.py`：手动下载及后台整轨保存接入；按 GUID 去重、限流、失败冷却及配置变化取消；完整路径引用避免旧 MP3 遮住升级后的 FLAC。用户官方绑定仍使用各自请求凭证。
+- `proxy/fallback_control.py`：现有非 root 容器内的私有 Socket 租约控制；独立 `musicdl-fallback` 进程按需启停，平台配置变化失效旧租约，停止 / 重启清理。
+- 容器、主机端口映射、管理页六个配置键、默认关闭和 FPK 模块已接入。使用与保存目录见 [DOWNLOAD_FALLBACK.md](DOWNLOAD_FALLBACK.md)。
+
+首版不改变网易列表的权限过滤，只处理有完整元数据的已知曲目；不混接流式 / Range 字节。音质判断描述真实文件编码，不能证明平台母带未经过有损转码。现有低档文件保留，严格模式不将其作为下载成功返回；App 标准档仍可能对源文件转成 MP3。
 
 ### 目标行为与实现边界
 
@@ -69,3 +82,5 @@
 ### 实现验收
 
 覆盖无 URL、低于目标音质、正常网易优先、成功跨平台匹配、版本或时长不符、试听排除、全部来源失败、目标音质全部不满足、允许降级、重复并发、服务停止/配置切换、下载来源元数据、多用户隔离及完整文件校验。运行生产依赖合约、完整 CI 与 FPK 构建，再在 fnOS 实机验证下载与落库。以实现提交和实际结果更新状态。
+
+本次新增单元与音频测试在本地执行；真实 Unix Socket 测试在本地因系统权限被拒而跳过，安排 GitHub Linux CI 执行。新增 `tests/integration/download_fallback_contract.py` 在实际镜像中验证非 root、按需启动、共享租约、平台切换、空闲停止、关闭和 Socket 清理。详细结果以 [VALIDATION.md](VALIDATION.md) 的本次记录为准，旧 807 passed 不作为新功能证据。
