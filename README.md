@@ -15,6 +15,7 @@
 | 打包 FPK、跟进原工程、解决冲突 | [打包与上游同步](docs/UPSTREAM.md) |
 | 查看实际测试与实机验证范围 | [验证记录](docs/VALIDATION.md) |
 | 交给部署 Agent 操作 | [Agent 安装说明](docs/AGENT_INSTALL.md) |
+| 接续迭代、核对双来源版本与维护 skill | [迭代交接](docs/ITERATION.md) · [来源清单](SOURCE_VERSIONS.json) · [Agent 入口](AGENTS.md) |
 
 ## 本版新增功能
 
