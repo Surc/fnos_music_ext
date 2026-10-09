@@ -811,3 +811,26 @@ def test_kuwo_force_mp3_url_extracts_from_official_api(monkeypatch):
     assert result is not None
     assert result[0].startswith("http://kw-er.kuwo.cn/") and "mp3" in result[0]
     assert result[1]["User-Agent"] == "okhttp/3.10.0"
+
+
+def test_fallback_process_uses_its_own_platform_list(monkeypatch, tmp_path):
+    env = tmp_path / ".env"
+    env.write_text("MUSICDL_SOURCES=qq\nFNMUSIC_DOWNLOAD_FALLBACK_SOURCES=migu,kuwo\n")
+    monkeypatch.setenv("FNMUSIC_ENV_FILE", str(env))
+    monkeypatch.setenv("MUSICDL_FALLBACK_MODE", "true")
+    assert app_module._startup_sources()[0] == ["migu", "kuwo"]
+    monkeypatch.delenv("MUSICDL_FALLBACK_MODE")
+    assert app_module._startup_sources()[0] == ["qq"]
+
+
+def test_earlier_slow_valid_probe_is_not_displaced_by_later_results(clean_state, monkeypatch):
+    songs = [_FakeSong(i, "KuwoMusicClient") for i in range(1, 9)]
+    monkeypatch.setattr(app_module, "_search_one_source", lambda *_: songs)
+    def probe(url, headers):
+        song_id = int(url.rsplit("/", 1)[-1].split(".")[0])
+        time.sleep(0.15 if song_id == 2 else 0.005)
+        return song_id % 2 == 0
+    monkeypatch.setattr(app_module, "_probe_playable_sync", probe)
+    entries = app_module._search_playable("KuwoMusicClient", "k", 8, 2,
+                                          deadline=time.monotonic() + 2)
+    assert [entry[0]["id"] for entry in entries] == ["kuwo:2", "kuwo:4"]
