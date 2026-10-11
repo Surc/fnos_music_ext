@@ -1,6 +1,6 @@
 # 迭代交接与来源记录
 
-记录日期：2026-10-09（Asia/Shanghai）。机器可读记录见 [SOURCE_VERSIONS.json](../SOURCE_VERSIONS.json)，续作入口见 [AGENTS.md](../AGENTS.md)。
+记录日期：2026-10-11（Asia/Shanghai）。机器可读记录见 [SOURCE_VERSIONS.json](../SOURCE_VERSIONS.json)，续作入口见 [AGENTS.md](../AGENTS.md)。
 
 ## 两个来源的采用基线
 
@@ -12,6 +12,14 @@
 2026-10-09 核对 GitHub：两个远端的默认分支都是 main，分支 head 都与上表相同。以后远端 head 可能变化；上表记录本次实际采用的快照。原工程经 Git merge 保留完整历史；参考工程移植了选定功能，其整个 main 没有合并进来。
 
 参考范围为 `proxy/playlists.py` 的发现分类、命名、顺序与缓存思路，以及 `musicbox-service/netease_ext.py` 的推荐歌单、私人 FM、分类与新碟接口语义。集成实现落在 `proxy/discovery.py`、`proxy/personalization.py`、`musicbox-service/discovery.py`，并接入代理、推荐、WebUI、容器及打包流程。原工程的部署、播放、数据恢复体系继续作为基础。
+
+## 2026-10-11 上游合并候选
+
+原工程 main / dev 与正式 v2.8.0 tag 指向 `6973402df5e180cd49a00af4db48758504303c58`，比既有基础多 30 个提交；参考 main 未变，仍为 `08b0b23486d289619ab73575f42aa0d20e78c2b3`。普通 merge 在独立同步分支准备，只有验证并进入 main 后才推进采用 SHA；当前记录为候选。
+
+包含 LX 多脚本启用、脚本兼容与缓存/熔断、播放跳歌修复、下载音质、储存目录、关于/日志与原生部署。冲突处理中重新接入六类发现、用户画像及严格下载补源，补齐原生备用进程、端口和 LX 补丁升级；保存目录的新入口为「储存 → 目录设置」。Skill 1.0.0 与文件摘要未改变。
+
+本次不移动已发布 tag，不创建新 Release。musicdl 服务搜索流程及依赖重复 timeout 参数尚未独立修复；真实平台与 fnOS 验收另行记录。
 
 ## 已发布与继续开发
 

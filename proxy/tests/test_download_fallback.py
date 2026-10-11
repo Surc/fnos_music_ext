@@ -17,6 +17,33 @@ from proxy.fallback_control import LeaseManager
 REF = {"title": "晴天", "artist": "周杰伦", "album": "叶惠美", "duration_s": 240}
 
 
+@pytest.mark.asyncio
+async def test_primary_download_retry_refresh_survives_fallback_wrapper(monkeypatch):
+    from unittest.mock import AsyncMock
+    fetch = AsyncMock()
+    monkeypatch.setattr(proxy, "_full_fetch_download_primary", fetch)
+    monkeypatch.setattr(df, "enabled_for", lambda *_: False)
+    await proxy._full_fetch_download("online:lxmusic:kw:123", {}, fresh_url=True)
+    fetch.assert_awaited_once_with("online:lxmusic:kw:123", {}, False, fresh_url=True)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("configured_port,expected", [(None, 8006), ("8776", 8776)])
+async def test_auxiliary_health_uses_deployment_port(monkeypatch, tmp_path, configured_port, expected):
+    from unittest.mock import AsyncMock
+    if configured_port is None:
+        monkeypatch.delenv("FALLBACK_HEALTH_PORT", raising=False)
+    else:
+        monkeypatch.setenv("FALLBACK_HEALTH_PORT", configured_port)
+    reader = type("Reader", (), {"readline": AsyncMock(return_value=b"HTTP/1.1 200 OK\r\n")})()
+    writer = type("Writer", (), {"write": lambda *_: None, "drain": AsyncMock(),
+                                 "close": lambda *_: None, "wait_closed": AsyncMock()})()
+    connect = AsyncMock(return_value=(reader, writer))
+    monkeypatch.setattr(asyncio, "open_connection", connect)
+    assert await LeaseManager(socket_path=str(tmp_path / "control.sock")).healthy()
+    connect.assert_awaited_once_with("127.0.0.1", expected)
+
+
 def track(provider="kuwo", **updates):
     return {**REF, "id": provider + ":123", "source": provider, **updates}
 

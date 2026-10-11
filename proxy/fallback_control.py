@@ -1,7 +1,7 @@
 """Small Unix-socket lease manager for the separate musicdl fallback process.
 
-Runs as the existing container user. No Docker socket, TCP control endpoint,
-administrator impersonation or user credentials. Idle/expired leases stop the
+Runs as the source runtime user (non-root in the existing container). No Docker
+socket, TCP control endpoint, administrator impersonation or user credentials. Idle/expired leases stop the
 auxiliary process, independently of the selected primary provider.
 """
 from __future__ import annotations
@@ -36,6 +36,8 @@ class LeaseManager:
     def __init__(self, env_path: str = "/repo/.env", socket_path: str = "/data/download-fallback.sock"):
         self.env_path = Path(env_path)
         self.socket_path = Path(socket_path)
+        # Native deployment listens on the host port; Docker keeps internal 8006.
+        self.health_port = int(os.environ.get("FALLBACK_HEALTH_PORT", "8006"))
         self.leases: dict[str, float] = {}
         self.lock = asyncio.Lock()
         self.started = False
@@ -48,7 +50,7 @@ class LeaseManager:
     async def healthy(self) -> bool:
         writer = None
         try:
-            reader, writer = await asyncio.wait_for(asyncio.open_connection("127.0.0.1", 8006), 2)
+            reader, writer = await asyncio.wait_for(asyncio.open_connection("127.0.0.1", self.health_port), 2)
             writer.write(b"GET /healthz HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n")
             await writer.drain()
             return b" 200 " in await asyncio.wait_for(reader.readline(), 2)
