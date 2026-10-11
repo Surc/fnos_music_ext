@@ -54,4 +54,17 @@ jobs:
           test "$(git rev-parse refs/remotes/reviewed/candidate)" = "$CANDIDATE_SHA"
           git merge-base --is-ancestor 264d5ace2d95ed515b9695245d28c23bf90e8f1f "$CANDIDATE_SHA"
           git merge-base --is-ancestor 6973402df5e180cd49a00af4db48758504303c58 "$CANDIDATE_SHA"
-          git push origin "$CANDIDATE_SHA:refs/heads/$TARGET_BRANCH"
+          git fetch origin main
+          previous="$(git ls-remote --heads origin "refs/heads/$TARGET_BRANCH" | cut -f1)"
+          if [[ -n "$previous" ]]; then
+            git fetch origin "$TARGET_BRANCH"
+            git checkout --detach FETCH_HEAD
+          else
+            git checkout --detach origin/main
+          fi
+          git diff --exit-code HEAD "$CANDIDATE_SHA" -- .github/workflows
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git merge --no-ff --no-edit refs/remotes/reviewed/candidate
+          git diff --exit-code "$CANDIDATE_SHA" HEAD
+          git push origin "HEAD:refs/heads/$TARGET_BRANCH"
