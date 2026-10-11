@@ -88,11 +88,14 @@ def _song_ids(raw: Any, limit: int) -> list[int]:
 
 
 def _tracks(raw: Any, limit: int) -> list[dict]:
-    # Reuse upstream batch detail + real URL/non-trial checks. Preserve song order.
+    # Details now include unavailable tracks for covers. Discovery still requires
+    # real, non-trial playback rights; keep that check at the list entry point.
     ids = _song_ids(raw, limit)
     out = []
     for offset in range(0, len(ids), 100):
-        out.extend(ne.batch_song_details(ids[offset:offset + 100]))
+        batch = ids[offset:offset + 100]
+        playable = ne.filter_playable_song_ids(batch)
+        out.extend(ne.batch_song_details([sid for sid in batch if sid in playable]))
     return out[:limit]
 
 

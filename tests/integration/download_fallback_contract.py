@@ -19,6 +19,7 @@ import urllib.request
 CONTROL = Path("/data/download-fallback.sock")
 ENV = Path("/repo/.env")
 CONF = "/etc/supervisor/supervisord.conf"
+HEALTH_URL = "http://127.0.0.1:8006/healthz"
 
 
 def status(program: str) -> str:
@@ -65,7 +66,7 @@ def main() -> None:
     assert first.get("ok"), first
     running = status("musicdl-fallback")
     assert "RUNNING" in running, running
-    with urllib.request.urlopen("http://127.0.0.1:8006/healthz", timeout=5) as response:
+    with urllib.request.urlopen(HEALTH_URL, timeout=5) as response:
         assert response.status == 200
     second = rpc("acquire")
     assert second.get("ok"), second

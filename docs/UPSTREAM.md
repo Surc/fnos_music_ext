@@ -1,6 +1,6 @@
 # 集成版打包、上游同步与移植边界
 
-本项目是 Surc/fnos_music_ext v2.7.1，保留原工程完整 Git 历史，基于 javycoder/fnos_music_ext v2.7.0 开发。功能使用见 [PERSONALIZATION.md](PERSONALIZATION.md)，安装见 [INSTALL.md](INSTALL.md)。
+本项目是 Surc/fnos_music_ext 集成版（最新已发布 v2.8.0），保留原工程完整 Git 历史，基于 javycoder/fnos_music_ext v2.7.0 开发。功能使用见 [PERSONALIZATION.md](PERSONALIZATION.md)，安装见 [INSTALL.md](INSTALL.md)。
 
 双来源的分支、VERSION、真实 tag、完整提交、采用范围、正式发行摘要与 skill 数据统一记录在 [SOURCE_VERSIONS.json](../SOURCE_VERSIONS.json)。本次快照、下一版待办与更新记录步骤见 [ITERATION.md](ITERATION.md)，Agent 从 [AGENTS.md](../AGENTS.md) 接续。参考工程 2.9.30 来自 VERSION 文件；查询 v2.9.30 tag 返回 404，因此按 SHA 锁定。
 
@@ -10,6 +10,8 @@
 | https://github.com/gzywd/fnos_music_ext | `08b0b23486d289619ab73575f42aa0d20e78c2b3`（v2.9.30） | `proxy/playlists.py` 的发现分类、命名、顺序、缓存思路及 `musicbox-service/netease_ext.py` 的推荐歌单/FM/分类/新碟接口适配 |
 
 两边使用 MIT 许可证。保留根目录 LICENSE 和作者提交历史。移植是按接口语义改写适配，不是把 Fork 部署/播放文件整套覆盖；具体新增模块为 `proxy/discovery.py`、`proxy/personalization.py`、`musicbox-service/discovery.py`。
+
+2026-10-11 在独立分支准备普通合并原工程 v2.8.0（`6973402df5e180cd49a00af4db48758504303c58`）；验证并进入 main 后再推进采用记录。新版目录设置、LX 多源、日志和原生部署与集成扩展共同回归。
 
 ## 开始维护本仓库
 

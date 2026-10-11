@@ -18,6 +18,8 @@
 | 交给部署 Agent 操作 | [Agent 安装说明](docs/AGENT_INSTALL.md) |
 | 接续迭代、核对双来源版本与维护 skill | [迭代交接](docs/ITERATION.md) · [来源清单](SOURCE_VERSIONS.json) · [Agent 入口](AGENTS.md) |
 
+当前 main 正在合并原工程 v2.8.0；下表中的 LX 多源、储存目录、日志与原生部署属于尚未发布的更新。已发布集成版 v2.8.0 的来源与附件保持固定。
+
 ## 本版新增功能
 
 | 功能 | 实际行为 | 使用条件 |
@@ -32,12 +34,18 @@
 | 顺序与缓存 | 中文上移 / 下移、过期后台刷新、每日缓存预热 | 管理页「播放与推荐」 |
 | 持续迭代与打包 | 上游同步脚本、同步 PR 工作流、FPK 在线打包 | Git / GitHub Actions |
 | 下载跨平台补源（v2.8.0） | 网易整轨不可用或音质不足时，严格匹配其他平台的完整同版音频，记录实际来源 | 网易主音源 + 管理页「边听边存」显式开启；v2.7.1 不含 |
+| LX 多源与兼容修复 | 多个脚本同时启用、失败换源、平台独立熔断、逐曲来源标记 | 洛雪主音源 + 自定义脚本 |
+| 播放与下载修复 | 转码分片覆盖检查、直链复用、缺省下载交付原文件 | 对应音源提供可用资源 |
+| 储存与日志 | 分开设置下载 / 缓存目录；关于页导出近三天日志 | 管理页「储存」「关于」 |
+| 原生部署 | 无 Docker 时由 systemd / supervisord 按需运行音源 | 脚本安装 `--deploy native` |
 
 **个性化范围：** 飞牛「每日推荐」按每个飞牛用户自己的记录处理；「为你推荐歌单」「私人 FM」由 NAS 上当前登录的同一个网易云账号提供。家庭成员的飞牛画像、收藏独立，但网易云账号仍共享，本版没有实现每个飞牛用户分别绑定网易云账号。
 
 发现歌单为只读，不把加歌、移歌、删歌或本地听歌事件写回网易云。曲目按账号可播放权限过滤，实际数量可能小于云端总数。下载补源首版不改变此过滤，只处理可取得完整元数据的已知曲目。
 
 ## 保留的基础能力
+
+核心代理在宿主机接管官方 Socket。音源与管理页默认运行在非 root Docker 容器；也可用 `./install.sh --deploy native` 按上游的宿主机 systemd / supervisord 形态部署。两种形态共用 `.env` 和 `sources-data/`，互斥运行，音源仍三选一；下载补源另用按需辅助进程。
 
 - **三主音源互斥切换**：网易云 musicbox、[musicdl](https://github.com/CharlesPikachu/musicdl) 多平台聚合、洛雪 lxmusic 自定义源，同一时间启用一个主音源；下载补源使用按需辅助服务。
 - **原生在线搜播**：飞牛音乐 Web / App 搜索结果本地优先，支持播放、歌词、封面与收藏；规则见 [搜索分页](docs/SEARCH_PAGINATION.md)。
@@ -60,11 +68,17 @@
 
 新安装默认写入发现与本地画像开关；已有 `.env` 保留自定义值。只替换源码、未执行升级安装时，新配置可能缺失，应在管理页显式开启并保存。管理员控制开关，各用户在自己的飞牛音乐账号下使用独立画像。
 
+- 桌面会出现「fnMusic 扩展管理」图标，点击即在飞牛桌面窗口内打开管理页（音源切换/扫码登录/平台选择/洛雪源配置）；
+- 选洛雪音源时向导不索要任何源信息：装好后打开管理页，在「音乐源 → 洛雪自定义源」里粘贴脚本 URL、上传电脑 `.js` 文件或从 NAS 选择，点源的「激活」做标记后保存即生效；支持多个源同时激活，解析失败自动在启用的源之间接力切换；
+- 在应用中心可随时「停止」（秒级还原官方直连）与「启动」（恢复扩展）；
+- 卸载前会自动把配置与数据（.env、网易云登录、收藏、播放历史）备份为存储卷根目录的 `fnmusic-ext-backup-<时间戳>.tar.gz`，需要彻底清理时手动删除该文件即可；
+- 也可用命令行安装：`sudo appcenter-cli install-fpk fnmusic-ext-<版本>.fpk`。
+
 本版「我的及收藏歌单」已包含自建和订阅歌单，无需同时开启原工程「音乐源 → 网易账号歌单」。取消 `mine` 类别或关闭发现后，旧开关仍可单独提供自建歌单。
 
 已有原版 FPK 时，在应用中心安装本版作为同应用升级；应用 ID 仍为 `fnmusic-ext`，升级流程备份并恢复配置、登录态、收藏与历史。脚本部署迁移、部署冲突处理见 [INSTALL.md](docs/INSTALL.md)。
 
-v2.8.0 的下载补源在「边听边存」开启，选择备用平台顺序、目标编码与是否允许降级；保存目录仍由该页「保存路径」决定。文件旁记录实际平台 / 曲目 ID 和音频信息。严格模式未找到完整同版资源就失败；无损编码检测不能证明母带未经过有损转码。使用方法及实际测试状态见 [补源说明](docs/DOWNLOAD_FALLBACK.md) 和 [迭代记录](docs/ITERATION.md)。
+下载补源在「储存 → 边听边存」开启，选择备用平台顺序、目标编码与是否允许降级；保存目录统一由「储存 → 目录设置 → 下载目录」决定。已发布 v2.8.0 的旧管理页仍在「边听边存 → 保存路径」设置。文件旁记录实际平台 / 曲目 ID 和音频信息。严格模式未找到完整同版资源就失败；无损编码检测不能证明母带未经过有损转码。使用方法及实际测试状态见 [补源说明](docs/DOWNLOAD_FALLBACK.md) 和 [迭代记录](docs/ITERATION.md)。
 
 ### 脚本安装
 
@@ -74,6 +88,19 @@ git clone https://github.com/Surc/fnos_music_ext.git fnmusic_ext
 cd fnmusic_ext
 chmod +x install.sh extend.sh restore.sh proxy/run_proxy.sh
 ./install.sh --non-interactive --sources musicbox --webui --extend
+
+# musicdl（酷我+咪咕精选）
+./install.sh --non-interactive --sources musicdl --extend
+
+# 洛雪自定义源（可选直接给源：http(s) URL 或本机 .js 文件路径，逗号分隔可配多个同时激活；
+# 不给则无源安装，装好在管理页 WebUI 里配置 URL / 上传 .js / NAS 选择）
+./install.sh --non-interactive --sources lxmusic \
+  --lx-source-url 'https://example.com/your-source.js' --extend
+./install.sh --non-interactive --sources lxmusic \
+  --lx-source-url 'https://a.example.com/src1.js,https://b.example.com/src2.js' --extend  # 多源同时激活
+./install.sh --non-interactive --sources lxmusic \
+  --lx-source-url "$HOME/scripts/my-source.js" --extend   # 本机路径自动复制进数据卷
+./install.sh --non-interactive --sources lxmusic --webui --extend  # 无源安装
 ```
 
 随后在管理页扫码并按上面的步骤开启功能。musicdl、洛雪和交互安装见 [安装指南](docs/INSTALL.md)。洛雪脚本由使用者提供，支持 URL、上传 `.js` 或从 NAS 选择；FPK 向导不要求填写脚本，装好后配置。
@@ -125,6 +152,8 @@ bash ./packaging/fpk/build.sh
 | 刚听歌 / 收藏后推荐没变 | 默认半小时冷却，六小时或跨日重建，访问歌单时后台触发 |
 | 歌单曲目很少 / 为空 | 检查账号权限、版权、网络和音源服务；可播过滤可能减少曲目 |
 | WebUI 打不开 / 没有新开关 | 用飞牛管理员从桌面图标进入；确认 WebUI 已启用，升级完成、容器已重建，并刷新浏览器 |
+
+运行日志保存在安装目录 `logs/`，管理页「关于」可导出 `.logzip`。LX 多源用 `LX_SOURCE_LIST` 记录启用状态；下载音质由 `FNMUSIC_DL_QUALITY` 控制，下载 / 缓存目录由 `FNMUSIC_TEE_SAVE_DIR` / `FNMUSIC_CACHE_DIR` 分别设置。完整配置见 [.env.example](.env.example)。
 
 ```bash
 ./extend.sh          # 启用 / 自检；手动改 .env 后重新验收
