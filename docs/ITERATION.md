@@ -6,18 +6,20 @@
 
 | 来源与角色 | 跟踪分支 | 本次采用版本 | 固定提交 | Git tag 情况 |
 | --- | --- | --- | --- | --- |
-| [javycoder/fnos_music_ext](https://github.com/javycoder/fnos_music_ext)，基础工程 | `main`；本地远端 `upstream` | VERSION：`2.7.0` | `f036e1f7082363c5f5e4892d15209ce584b0769b` | `v2.7.0` 为 annotated tag，解析后指向此提交 |
+| [javycoder/fnos_music_ext](https://github.com/javycoder/fnos_music_ext)，基础工程 | `main`；本地远端 `upstream` | VERSION：`2.8.0` | `6973402df5e180cd49a00af4db48758504303c58` | `v2.8.0` 为 annotated tag，解析后指向此提交；对象 `71e721bbc0495603532a9117f0fd218f50bdd805` |
 | [gzywd/fnos_music_ext](https://github.com/gzywd/fnos_music_ext)，发现功能参考 | `main`；本地远端 `reference` | VERSION：`2.9.30` | `08b0b23486d289619ab73575f42aa0d20e78c2b3` | 查询 `refs/tags/v2.9.30` 返回 404；使用 VERSION + SHA 锁定 |
 
-2026-10-09 核对 GitHub：两个远端的默认分支都是 main，分支 head 都与上表相同。以后远端 head 可能变化；上表记录本次实际采用的快照。原工程经 Git merge 保留完整历史；参考工程移植了选定功能，其整个 main 没有合并进来。
+2026-10-11 核对 GitHub：两个远端默认分支都是 main，本次采用的 head 如上。最初采用的 javycoder v2.7.0 `f036e1f7082363c5f5e4892d15209ce584b0769b` 保留在 JSON 的 baseline 中；表中是当前采用快照。原工程经普通 merge 保留完整历史；参考工程仅移植选定功能。
 
 参考范围为 `proxy/playlists.py` 的发现分类、命名、顺序与缓存思路，以及 `musicbox-service/netease_ext.py` 的推荐歌单、私人 FM、分类与新碟接口语义。集成实现落在 `proxy/discovery.py`、`proxy/personalization.py`、`musicbox-service/discovery.py`，并接入代理、推荐、WebUI、容器及打包流程。原工程的部署、播放、数据恢复体系继续作为基础。
 
-## 2026-10-11 上游合并候选
+## 2026-10-11 上游合并完成
 
-原工程 main / dev 与正式 v2.8.0 tag 指向 `6973402df5e180cd49a00af4db48758504303c58`，比既有基础多 30 个提交；参考 main 未变，仍为 `08b0b23486d289619ab73575f42aa0d20e78c2b3`。普通 merge 在独立同步分支准备，只有验证并进入 main 后才推进采用 SHA；当前记录为候选。
+原工程 main / dev 与正式 v2.8.0 tag 指向 `6973402df5e180cd49a00af4db48758504303c58`，比既有基础多 30 个提交；参考 main 未变，仍为 `08b0b23486d289619ab73575f42aa0d20e78c2b3`。[PR #4](https://github.com/Surc/fnos_music_ext/pull/4) 已普通合并至 main，合并提交 `1fe3adf71c7f9a04e6fd1b7429c58d5120c270b7`；原始冲突解法保存在 `d56b8da17b4241024f5efa42ecfe85ac6a6d6c7e`。进入 main 后追加采用事件并推进 SHA。
 
-包含 LX 多脚本启用、脚本兼容与缓存/熔断、播放跳歌修复、下载音质、储存目录、关于/日志与原生部署。冲突处理中重新接入六类发现、用户画像及严格下载补源，补齐原生备用进程、端口和 LX 补丁升级；保存目录的新入口为「储存 → 目录设置」。Skill 1.0.0 与文件摘要未改变。
+包含 LX 多脚本启用、脚本兼容与缓存/熔断、播放跳歌修复、下载音质、储存目录、关于/日志与原生部署。冲突处理中重新接入六类发现、用户画像及严格下载补源，补齐原生备用进程、端口和 LX 补丁升级；保存目录的新入口为「储存 → 目录设置」。发现列表独立保留可播/非试听过滤，详情补全仍保留封面。Skill 1.0.0 与文件摘要未改变。
+
+[PR CI](https://github.com/Surc/fnos_music_ext/actions/runs/38113398107) 11 项检查全部成功，验证 head 为 `4be7b7822bc71927dfc7cd24d1a916b031357561`，Python 3.11 / 3.13 各 1116 passed、4 skipped。Docker 与原生配置的下载补源真实进程合约、六组生产依赖合约和 FPK 构建/校验均通过。合并后的 [main CI](https://github.com/Surc/fnos_music_ext/actions/runs/38113626387) 同样 11 项成功、两版本各 1116 passed、4 skipped。跳过项和实机范围见 [VALIDATION.md](VALIDATION.md)。
 
 本次不移动已发布 tag，不创建新 Release。musicdl 服务搜索流程及依赖重复 timeout 参数尚未独立修复；真实平台与 fnOS 验收另行记录。
 
@@ -69,7 +71,7 @@
 
 ### 上游计划核对（2026-10-09）
 
-两个 main 的 head 仍是本文件的采用基线。javycoder 的 [#39](https://github.com/javycoder/fnos_music_ext/issues/39#issuecomment-6064611243) 作者表示以后再试、目前仍一个音源；[#47](https://github.com/javycoder/fnos_music_ext/issues/47) 提出失败切源与目录需求，但未发现对应实现 PR 或确定版本承诺。其 dev 没有新增补源实现，Automatic_iteration 分支是旧搜索重试工作；gzywd 当前代码主要面向单一网易源。用户要求我们自己实现，因此本次以现有 musicdl API 适配独立下载链路，没有从上游推进采用 SHA。
+当时两个 main 的 head 分别为 javycoder `f036e1f` 和 gzywd `08b0b23`；该段记录 2026-10-09 的计划核对，不代表当前 main 的采用 SHA。javycoder 的 [#39](https://github.com/javycoder/fnos_music_ext/issues/39#issuecomment-6064611243) 作者表示以后再试、目前仍一个音源；[#47](https://github.com/javycoder/fnos_music_ext/issues/47) 提出失败切源与目录需求，但未发现对应实现 PR 或确定版本承诺。其 dev 没有新增补源实现，Automatic_iteration 分支是旧搜索重试工作；gzywd 当前代码主要面向单一网易源。用户要求我们自己实现，因此本次以现有 musicdl API 适配独立下载链路，没有从上游推进采用 SHA。
 
 ### v2.8.0 实现
 

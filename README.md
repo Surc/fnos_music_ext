@@ -2,9 +2,9 @@
 
 [![CI](https://github.com/Surc/fnos_music_ext/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Surc/fnos_music_ext/actions/workflows/ci.yml)
 
-本仓库由 **Surc** 维护，基于 `javycoder/fnos_music_ext` v2.7.0，发行版本 **v2.8.0**。在原工程的三音源切换、在线搜播、歌词封面、边听边存和 AI 推荐基础上，加入 **网易云发现歌单、私人 FM、按飞牛用户自己历史与收藏优化的每日推荐**；v2.8.0 新增可配置的 **网易云下载跨平台补源**。保留原工程完整 Git 历史，方便持续同步上游。
+本仓库由 **Surc** 维护，当前 main 已同步 `javycoder/fnos_music_ext` v2.8.0；最新已发布集成版为 **v2.8.0**。在原工程的三音源切换、在线搜播、歌词封面、边听边存和 AI 推荐基础上，加入 **网易云发现歌单、私人 FM、按飞牛用户自己历史与收藏优化的每日推荐**；集成版 v2.8.0 新增可配置的 **网易云下载跨平台补源**。保留原工程完整 Git 历史，方便持续同步上游。
 
-代理在宿主机接管飞牛音乐 Unix Socket，音源与管理页运行在一个 Docker 容器。飞牛官方程序、nginx 配置与数据库保持原样，本地画像只读官方数据库；停止扩展可恢复官方直连。
+代理在宿主机接管飞牛音乐 Unix Socket，音源与管理页默认运行在一个 Docker 容器；当前 main 也支持上游的原生部署形态。飞牛官方程序、nginx 配置与数据库保持原样，本地画像只读官方数据库；停止扩展可恢复官方直连。
 
 **开始使用：** [下载 FPK](https://github.com/Surc/fnos_music_ext/releases) → fnOS 应用中心手动安装 → 选择网易云 → 管理页扫码登录 →「播放与推荐」开启发现与本地画像。
 
@@ -18,7 +18,7 @@
 | 交给部署 Agent 操作 | [Agent 安装说明](docs/AGENT_INSTALL.md) |
 | 接续迭代、核对双来源版本与维护 skill | [迭代交接](docs/ITERATION.md) · [来源清单](SOURCE_VERSIONS.json) · [Agent 入口](AGENTS.md) |
 
-当前 main 正在合并原工程 v2.8.0；下表中的 LX 多源、储存目录、日志与原生部署属于尚未发布的更新。已发布集成版 v2.8.0 的来源与附件保持固定。
+当前 main 已通过 [PR #4](https://github.com/Surc/fnos_music_ext/pull/4) 合并原工程 v2.8.0（`6973402df5e180cd49a00af4db48758504303c58`）；下表中的 LX 多源、储存目录、日志与原生部署属于尚未发布的更新。已发布集成版 v2.8.0 的来源与附件保持固定。
 
 ## 本版新增功能
 
