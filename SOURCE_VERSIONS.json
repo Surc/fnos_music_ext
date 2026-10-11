@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "recorded_on": "2026-10-09",
+  "recorded_on": "2026-10-11",
   "timezone": "Asia/Shanghai",
   "project": {
     "repository": "https://github.com/Surc/fnos_music_ext",
@@ -38,9 +38,12 @@
         "fpk_lifecycle"
       ],
       "last_observed_head": {
-        "checked_on": "2026-10-09",
-        "commit": "f036e1f7082363c5f5e4892d15209ce584b0769b",
-        "version": "2.7.0"
+        "checked_on": "2026-10-11",
+        "commit": "6973402df5e180cd49a00af4db48758504303c58",
+        "version": "2.8.0",
+        "tag": "v2.8.0",
+        "tag_object": "71e721bbc0495603532a9117f0fd218f50bdd805",
+        "tag_type": "annotated"
       },
       "last_integrated_version": "2.7.0"
     },
@@ -78,7 +81,7 @@
       ],
       "whole_branch_merged": false,
       "last_observed_head": {
-        "checked_on": "2026-10-09",
+        "checked_on": "2026-10-11",
         "commit": "08b0b23486d289619ab73575f42aa0d20e78c2b3",
         "version": "2.9.30"
       },
@@ -306,6 +309,16 @@
       "release_tag": "v2.8.0",
       "release_commit": "3e9c6cdb4f8e90416457dde9a3dc3984831b023b",
       "release_url": "https://github.com/Surc/fnos_music_ext/releases/tag/v2.8.0"
+    }
+  ],
+  "pending_integrations": [
+    {
+      "upstream_commit": "6973402df5e180cd49a00af4db48758504303c58",
+      "upstream_version": "2.8.0",
+      "prepared_on": "2026-10-11",
+      "status": "awaiting_main_merge",
+      "integration_mode": "git_merge_preserving_history",
+      "note": "Keep adopted SHA unchanged until the tested merge enters main; append completed event afterwards."
     }
   ]
 }
