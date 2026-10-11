@@ -1,8 +1,12 @@
 # 集成版验证记录（2026-10-11）
 
-## 原工程 v2.8.0 合并候选（2026-10-11）
+## 原工程 v2.8.0 合并（2026-10-11）
 
-合并候选包含原工程 `6973402df5e180cd49a00af4db48758504303c58` 的 30 个提交。保留发现、画像和下载补源，并适配原生备用进程、宿主健康端口、LX 补丁和新的目录设置。GitHub 完整 CI 待本候选提交后实际运行，以下不沿用既有 Release 的结果。
+经 [PR #4](https://github.com/Surc/fnos_music_ext/pull/4) 普通 merge 合入原工程 `6973402df5e180cd49a00af4db48758504303c58` 的 30 个提交，main 合并提交为 `1fe3adf71c7f9a04e6fd1b7429c58d5120c270b7`。保留发现、画像和下载补源，并适配原生备用进程、宿主健康端口、LX 补丁和新的目录设置。以下是本次实际结果，不沿用既有 Release 的 857 项结果。
+
+- [PR CI](https://github.com/Surc/fnos_music_ext/actions/runs/38113398107)（head `4be7b7822bc71927dfc7cd24d1a916b031357561`）与 [main CI](https://github.com/Surc/fnos_music_ext/actions/runs/38113626387)（上述 main 合并提交）的 11 项检查均成功。两个运行中，Python 3.11 / 3.13 均各 1116 passed、4 skipped，没有失败。
+- 四项跳过来自上游测试条件：一项 root 创建日志后 UID 1000 读取检查，两项安装日志共享权限检查需要 UID/GID 1000 组条件，一项二维码徽标检查需要 CJK 字体。没有删测试或更改跳过规则；不将这些项目记为已执行通过。
+- 六组真实生产依赖合约、Shellcheck、编译与前端行为、Docker 镜像、下载补源生命周期、原生 Supervisor 路径/宿主端口合约和 fnpack FPK 构建/包内检查/SHA256 校验均成功。镜像合约在断网的 UID 1000 进程下运行，验证按需启动、共享租约、配置变化、空闲停止及关闭清理。
 
 - 本地 Python 3.12 相关专项最终为 195 passed、1 skipped；跳过涉及当前环境的 Unix Socket 限制。管理页 Node 行为 27 项通过。
 - 本地首轮全工程为 1057 passed、58 failed、3 skipped、2 errors。发现列表权限过滤与关于页测试预期的两项合并差异已修复，专项重跑通过；其余失败涉及本环境的 Socket、进程身份与属主操作限制。

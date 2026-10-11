@@ -26,7 +26,7 @@
         "tag_object": "c61a0c6dd3e394c482572f99bdf97c1520e808f1",
         "tag_type": "annotated"
       },
-      "last_integrated_commit": "f036e1f7082363c5f5e4892d15209ce584b0769b",
+      "last_integrated_commit": "6973402df5e180cd49a00af4db48758504303c58",
       "integration_mode": "git_merge_preserving_history",
       "scope": [
         "proxy_and_playback",
@@ -35,7 +35,11 @@
         "ai_recommendation",
         "webui",
         "docker",
-        "fpk_lifecycle"
+        "fpk_lifecycle",
+        "native_sources_deployment",
+        "lx_multi_source_compatibility",
+        "storage_directories",
+        "diagnostic_logs"
       ],
       "last_observed_head": {
         "checked_on": "2026-10-11",
@@ -45,7 +49,7 @@
         "tag_object": "71e721bbc0495603532a9117f0fd218f50bdd805",
         "tag_type": "annotated"
       },
-      "last_integrated_version": "2.7.0"
+      "last_integrated_version": "2.8.0"
     },
     {
       "id": "reference",
@@ -122,6 +126,64 @@
       ],
       "reference_scope": "independent_implementation_using_existing_musicdl_api",
       "notes": "Download-only fallback with strict identity and full audio validation, on-demand non-root auxiliary lifecycle, original primary selection and per-fnOS-user binding preserved; no source baseline advanced."
+    },
+    {
+      "recorded_on": "2026-10-11",
+      "project_version": "2.8.0",
+      "release_status": "unreleased",
+      "merge_commit": "1fe3adf71c7f9a04e6fd1b7429c58d5120c270b7",
+      "pull_request": "https://github.com/Surc/fnos_music_ext/pull/4",
+      "reviewed_merge_commit": "d56b8da17b4241024f5efa42ecfe85ac6a6d6c7e",
+      "validated_head": "4be7b7822bc71927dfc7cd24d1a916b031357561",
+      "previous_upstream_commit": "f036e1f7082363c5f5e4892d15209ce584b0769b",
+      "upstream_commits_merged": 30,
+      "sources": {
+        "upstream": "6973402df5e180cd49a00af4db48758504303c58",
+        "reference": "08b0b23486d289619ab73575f42aa0d20e78c2b3"
+      },
+      "upstream_version": "2.8.0",
+      "upstream_tag_object": "71e721bbc0495603532a9117f0fd218f50bdd805",
+      "integration_mode": "git_merge_preserving_history",
+      "implemented_modules": [
+        "proxy/app.py",
+        "proxy/fnlog.py",
+        "proxy/fallback_control.py",
+        "musicbox-service/discovery.py",
+        "container/supervisord-native.conf.in",
+        "ensure_sources_native.sh",
+        "tests/integration/native_fallback_contract.py"
+      ],
+      "reference_scope": "unchanged_selected_semantic_port",
+      "validation": {
+        "pr_ci": {
+          "url": "https://github.com/Surc/fnos_music_ext/actions/runs/38113398107",
+          "conclusion": "success",
+          "checks_passed": 11,
+          "pytest_python_versions": [
+            "3.11",
+            "3.13"
+          ],
+          "pytest_passed_per_version": 1116,
+          "pytest_skipped_per_version": 4
+        },
+        "fpk_build": "success",
+        "docker_fallback_lifecycle": "success",
+        "native_supervisor_paths_and_host_port_contract": "success",
+        "fnos_real_device": "not_run",
+        "main_ci": {
+          "url": "https://github.com/Surc/fnos_music_ext/actions/runs/38113626387",
+          "conclusion": "success",
+          "checks_passed": 11,
+          "pytest_python_versions": [
+            "3.11",
+            "3.13"
+          ],
+          "pytest_passed_per_version": 1116,
+          "pytest_skipped_per_version": 4,
+          "commit": "1fe3adf71c7f9a04e6fd1b7429c58d5120c270b7"
+        }
+      },
+      "notes": "Merged original upstream v2.8.0, preserving discovery, per-user profiles, strict download fallback, non-root Docker and source exclusivity. Native mode retains upstream host unit identity. Existing release tags/assets and skill 1.0.0 remain fixed; musicdl duplicate timeout issue is not independently fixed."
     }
   ],
   "releases": [
@@ -311,14 +373,5 @@
       "release_url": "https://github.com/Surc/fnos_music_ext/releases/tag/v2.8.0"
     }
   ],
-  "pending_integrations": [
-    {
-      "upstream_commit": "6973402df5e180cd49a00af4db48758504303c58",
-      "upstream_version": "2.8.0",
-      "prepared_on": "2026-10-11",
-      "status": "awaiting_main_merge",
-      "integration_mode": "git_merge_preserving_history",
-      "note": "Keep adopted SHA unchanged until the tested merge enters main; append completed event afterwards."
-    }
-  ]
+  "pending_integrations": []
 }

@@ -1,17 +1,17 @@
 # 集成版打包、上游同步与移植边界
 
-本项目是 Surc/fnos_music_ext 集成版（最新已发布 v2.8.0），保留原工程完整 Git 历史，基于 javycoder/fnos_music_ext v2.7.0 开发。功能使用见 [PERSONALIZATION.md](PERSONALIZATION.md)，安装见 [INSTALL.md](INSTALL.md)。
+本项目是 Surc/fnos_music_ext 集成版（最新已发布 v2.8.0），保留原工程完整 Git 历史，当前 main 已同步 javycoder/fnos_music_ext v2.8.0，最初采用基线为 v2.7.0。功能使用见 [PERSONALIZATION.md](PERSONALIZATION.md)，安装见 [INSTALL.md](INSTALL.md)。
 
 双来源的分支、VERSION、真实 tag、完整提交、采用范围、正式发行摘要与 skill 数据统一记录在 [SOURCE_VERSIONS.json](../SOURCE_VERSIONS.json)。本次快照、下一版待办与更新记录步骤见 [ITERATION.md](ITERATION.md)，Agent 从 [AGENTS.md](../AGENTS.md) 接续。参考工程 2.9.30 来自 VERSION 文件；查询 v2.9.30 tag 返回 404，因此按 SHA 锁定。
 
 | 来源 | 固定提交 | 使用范围 |
 | --- | --- | --- |
-| https://github.com/javycoder/fnos_music_ext | `f036e1f7082363c5f5e4892d15209ce584b0769b` | 代理、三音源单选、AI 推荐、原生收藏/历史、管理页、Docker 和 FPK 基础 |
+| https://github.com/javycoder/fnos_music_ext | `6973402df5e180cd49a00af4db48758504303c58`（v2.8.0） | 代理、三音源单选、AI 推荐、原生收藏/历史、管理页、Docker / 原生部署和 FPK 基础；含 LX 多源、目录与日志更新 |
 | https://github.com/gzywd/fnos_music_ext | `08b0b23486d289619ab73575f42aa0d20e78c2b3`（v2.9.30） | `proxy/playlists.py` 的发现分类、命名、顺序、缓存思路及 `musicbox-service/netease_ext.py` 的推荐歌单/FM/分类/新碟接口适配 |
 
 两边使用 MIT 许可证。保留根目录 LICENSE 和作者提交历史。移植是按接口语义改写适配，不是把 Fork 部署/播放文件整套覆盖；具体新增模块为 `proxy/discovery.py`、`proxy/personalization.py`、`musicbox-service/discovery.py`。
 
-2026-10-11 在独立分支准备普通合并原工程 v2.8.0（`6973402df5e180cd49a00af4db48758504303c58`）；验证并进入 main 后再推进采用记录。新版目录设置、LX 多源、日志和原生部署与集成扩展共同回归。
+2026-10-11 经 [PR #4](https://github.com/Surc/fnos_music_ext/pull/4) 普通合并原工程 v2.8.0 的 30 个提交，合并提交 `1fe3adf71c7f9a04e6fd1b7429c58d5120c270b7`。采用记录已推进到上述 SHA，原始 v2.7.0 基线和历次采用事件保留。新版目录设置、LX 多源、日志和原生部署与集成扩展共同回归；变更列入 Unreleased，既有发行 tag 不动。
 
 ## 开始维护本仓库
 
