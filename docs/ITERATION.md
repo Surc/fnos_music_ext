@@ -1,6 +1,29 @@
 # 迭代交接与来源记录
 
-记录日期：2026-10-11（Asia/Shanghai）。机器可读记录见 [SOURCE_VERSIONS.json](../SOURCE_VERSIONS.json)，续作入口见 [AGENTS.md](../AGENTS.md)。
+记录日期：2026-10-12（Asia/Shanghai）。机器可读记录见 [SOURCE_VERSIONS.json](../SOURCE_VERSIONS.json)，续作入口见 [AGENTS.md](../AGENTS.md)。
+
+## 2026-10-12 酷我搜索最小修复（未发布）
+
+独立分支 `fix/kuwo-search-discovery` 基于 `34782d1543fd9291613fc47395a8a02a835e16f1`。
+真实移动接口首屏第 4 条包含 DAYBREAK'S BELL 原唱 252 秒版 `kuwo:142276943`；
+旧库搜索入口在当前环境没有取得响应，此外库内、服务和代理均存在直链前置过滤。
+排查不能断言这些就是用户 2026-10-10 漏搜的唯一原因。
+
+酷我改为一页元数据搜索，候选标记待验证，播放按 RID 解析并检查音频头/实际时长。
+其他源保持原搜索过滤；网易发现、画像、严格下载补源与主音源互斥保持原结构。
+真实搜索在网络超时调整为 10 秒后返回 30 条并包含目标；真实播放解析超时返回
+502，未误标可播。新增单元/真实音频头测试、真实 musicdl 依赖离线合约；验证
+结果见 [VALIDATION.md](VALIDATION.md)，调用链和复现方法见
+[KUWO_SEARCH_DIAGNOSIS.md](KUWO_SEARCH_DIAGNOSIS.md)。
+
+合法空结果和聚合宽限期取消不再误累计熔断。仅酷我避开库中重复 timeout 的
+第三方解析路径，其他平台的依赖问题没有全局修改。双来源采用基线、skill 1.0.0、
+VERSION 与正式 v2.8.0 保持原记录；不创建 Release，fnOS 实机验收待完成。
+
+提交状态：代码已在本地独立分支提交。GitHub 集成上传代码返回
+`403 Resource not accessible by integration`，CLI 推送也无可用登录凭据。
+经用户授权改用已登录 GitHub 网页提交独立分支；PR 与当前 head 的 CI
+结果将在提交完成后登记，不移动正式 tag。
 
 ## 两个来源的采用基线
 
