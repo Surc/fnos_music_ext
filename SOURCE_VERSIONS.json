@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "recorded_on": "2026-10-11",
+  "recorded_on": "2026-10-12",
   "timezone": "Asia/Shanghai",
   "project": {
     "repository": "https://github.com/Surc/fnos_music_ext",
@@ -371,6 +371,32 @@
       "release_tag": "v2.8.0",
       "release_commit": "3e9c6cdb4f8e90416457dde9a3dc3984831b023b",
       "release_url": "https://github.com/Surc/fnos_music_ext/releases/tag/v2.8.0"
+    },
+    {
+      "id": "kuwo-search-metadata-discovery",
+      "status": "implemented",
+      "requested_on": "2026-10-12",
+      "included_in_release": false,
+      "design_document": "docs/KUWO_SEARCH_DIAGNOSIS.md",
+      "implementation_candidate": {
+        "branch": "fix/kuwo-search-discovery",
+        "base_commit": "34782d1543fd9291613fc47395a8a02a835e16f1",
+        "release_status": "unreleased",
+        "modules": [
+          "musicdl-service/app.py",
+          "proxy/app.py"
+        ],
+        "hotdownloader_reference_commit": "07e86c3d06243cf1350925c0dd3be704005abd29",
+        "musicdl_tested_version": "2.14.1",
+        "scope": "Kuwo first-page metadata discovery and per-RID validated playback; no multi-source refactor",
+        "real_api": {
+          "search": "target present at rank 4 in mobile search; service returned 30 candidates with request timeout 10s",
+          "stream": "502 after per-song resolve timeout; no redirect or verified claim",
+          "fnos_device": "not_run"
+        },
+        "submission_status": "submitting_via_authorized_github_browser",
+        "github_ci": "pending_pull_request"
+      }
     }
   ],
   "pending_integrations": []
