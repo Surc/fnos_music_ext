@@ -4,8 +4,11 @@
 两个消费方（fnmusic-ext 代理、music-box）都以该 ID 串通信。
 """
 import asyncio
+import html
+import io
 import json
 import logging
+import math
 import os
 import re
 import subprocess
@@ -15,6 +18,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed, TimeoutError as FuturesTimeoutError
 from contextlib import asynccontextmanager, suppress
 from pathlib import Path
+from types import SimpleNamespace
 
 import httpx
 from fastapi import FastAPI, Header, HTTPException, Query, Request
@@ -204,6 +208,8 @@ def _cache_get(song_id: str):
 
 def _search_one_source(source: str, keyword: str, limit: int) -> list:
     """单个源搜索（工作线程内执行，阻塞）。"""
+    if source == "KuwoMusicClient":
+        return _search_kuwo_metadata(keyword, limit)
     client = musicdl.MusicClient(
         music_sources=[source],
         init_music_clients_cfg={
@@ -222,10 +228,61 @@ def _search_one_source(source: str, keyword: str, limit: int) -> list:
     return list(result.values())[0] if result else []
 
 
+def _search_kuwo_metadata(keyword: str, limit: int) -> list:
+    """One metadata page, without musicdl's per-song URL parsing/filtering.
+
+    Parameters follow HotDownloader's mobile search; all= is encoded once by
+    httpx. Other sources retain their existing musicdl search contract.
+    """
+    size = min(max(int(limit or 1), 1), 30)
+    params = {"client": "kt", "all": keyword, "ft": "music", "encoding": "utf8",
+              "rformat": "json", "pcjson": "1", "itemset": "web_2013",
+              "vipver": "1", "newver": "1", "mobi": "1", "pn": "0", "rn": size}
+    with httpx.Client(timeout=CONF["request_timeout"], follow_redirects=True) as client:
+        response = client.get("http://search.kuwo.cn/r.s", params=params,
+                              headers={"User-Agent": "kwplayer_ar_9.2.2.1"})
+        response.raise_for_status()
+        data = response.json()
+    if not isinstance(data, dict) or not isinstance(data.get("abslist"), list):
+        raise ValueError("Kuwo search response has no abslist")
+    songs = []
+    seen = set()
+    for row in data["abslist"][:size]:
+        if not isinstance(row, dict):
+            continue
+        rid = str(row.get("MUSICRID") or "").removeprefix("MUSIC_")
+        if not rid.isascii() or not rid.isdigit() or int(rid) <= 0 or rid in seen:
+            continue
+        title = html.unescape(str(row.get("SONGNAME") or row.get("NAME") or "")).strip()
+        if not title or any(marker in title for marker in TRIAL_MARKERS):
+            continue
+        if (row.get("is_trial") or row.get("freeTrialInfo") or row.get("freeTrialPrivilege")
+                or str(row.get("is_free_part") or row.get("ISFREEPART") or "0") != "0"
+                or str(row.get("fail_process") or "0") == "4"):
+            continue
+        try:
+            duration = float(row.get("DURATION") or 0)
+            if not math.isfinite(duration) or duration < 0:
+                duration = 0
+        except (TypeError, ValueError):
+            duration = 0
+        seen.add(rid)
+        songs.append(SimpleNamespace(
+            source="KuwoMusicClient", identifier=rid, song_name=title,
+            singers=html.unescape(str(row.get("ARTIST") or "")),
+            album=html.unescape(str(row.get("ALBUM") or "")), duration_s=duration,
+            cover_url=row.get("hts_MVPIC") or row.get("albumpic") or "",
+            playback_status="unresolved",
+        ))
+    logger.info("Kuwo metadata search: raw=%d retained=%d requested=%d total=%s",
+                len(data["abslist"]), len(songs), size, data.get("TOTAL", "unknown"))
+    return songs
+
+
 def _normalize(song, keyword: str) -> dict:
     src = _source_short(getattr(song, "source", "") or "")
     sid = str(getattr(song, "identifier", "") or "")
-    return {
+    item = {
         "id": f"{src}:{sid}",
         "source": src,
         "title": getattr(song, "song_name", "") or "",
@@ -239,6 +296,11 @@ def _normalize(song, keyword: str) -> dict:
         "albummid": str(getattr(song, "albummid", "") or getattr(song, "album_mid", "") or ""),
         "download_url": getattr(song, "download_url", "") or "",
     }
+    if getattr(song, "playback_status", "") == "unresolved" and src == "kuwo":
+        # A discovery candidate is not proof of a usable stream or its quality.
+        item.pop("download_url")
+        item.update(playback_status="unresolved", verified=False)
+    return item
 
 
 TRIAL_MARKERS = (
@@ -344,6 +406,16 @@ def _search_playable(source: str, keyword: str, fetch_size: int, limit: int,
         item = _normalize(song, keyword)
         if song_id is not None and item["id"] != song_id:
             continue
+        if item.get("playback_status") == "unresolved" and song_id is None:
+            if (progress is not None and progress.stopped()) or (
+                    deadline is not None and time.monotonic() >= deadline):
+                if progress is not None:
+                    progress.partial = True
+                break
+            candidates.append((item, {}, ""))
+            if progress is not None:
+                progress.append(candidates[-1], rank=len(candidates) - 1)
+            continue
         if not _is_candidate_playable(song, item):
             continue
         headers = getattr(song, "default_download_headers", {}) or {}
@@ -351,6 +423,8 @@ def _search_playable(source: str, keyword: str, fetch_size: int, limit: int,
         candidates.append((item, headers, lyric))
     if not candidates:
         return []
+    if all(item.get("playback_status") == "unresolved" for item, _, _ in candidates):
+        return candidates[:limit]
     if (progress is not None and progress.stopped()) or (
             deadline is not None and time.monotonic() >= deadline):
         if progress is not None:
@@ -396,10 +470,20 @@ async def _refresh_by_keyword(song_id: str) -> dict | None:
         src_client = _source_client(entry["item"].get("source", ""))
         limit = max(CONF["limit_per_source"], 10)
         timeout = ADAPTIVE.timeout_for(src_client)
-        entries = await SOURCE_WORKERS.run(
-            src_client, _search_playable, src_client, entry["keyword"], limit, 1, song_id,
-            time.monotonic() + timeout, timeout=timeout,
-        )
+        if src_client == "KuwoMusicClient" and "playback_status" in entry["item"]:
+            # Resolve exactly this RID, even if it is now outside the first page.
+            pending = dict(entry["item"])
+            pending.pop("download_url", None)
+            pending.update(playback_status="unresolved", verified=False, file_size=0)
+            _cache_put(pending, entry["keyword"], {}, entry.get("lyric", ""))
+            resolved = await SOURCE_WORKERS.run(
+                src_client, _resolve_kuwo_entry_sync, entry, timeout=timeout)
+            entries = [resolved] if resolved else []
+        else:
+            entries = await SOURCE_WORKERS.run(
+                src_client, _search_playable, src_client, entry["keyword"], limit, 1, song_id,
+                time.monotonic() + timeout, timeout=timeout,
+            )
     except Exception as exc:
         logger.warning("Refresh failed for %s: %s", song_id, exc)
         return None
@@ -407,6 +491,116 @@ async def _refresh_by_keyword(song_id: str) -> dict | None:
         _cache_put(item, entry["keyword"], headers, lyric)
         return _cache_get(song_id)
     return None
+
+
+class _AudioSample(io.BytesIO):
+    """Use origin length for CBR MP3 duration without downloading the full file."""
+
+    def __init__(self, data: bytes, full_size: int):
+        super().__init__(data)
+        self.full_size = full_size
+
+    def seek(self, offset, whence=0):
+        if whence == 2:
+            return super().seek(self.full_size + offset)
+        return super().seek(offset, whence)
+
+
+def _kuwo_audio_matches_sync(url: str, headers: dict, ext: str, expected_s: float) -> bool:
+    """Check audio headers and actual duration; HTTP 200 alone proves nothing.
+
+    FLAC STREAMINFO and MP3 Xing/VBRI carry duration. CBR MP3 uses the origin's
+    full length, never the range sample length. Unknown duration fails closed.
+    This checks a header sample, not the integrity of the entire recording;
+    lossless decoding and full-download validation retain their existing gates.
+    """
+    if not math.isfinite(expected_s) or expected_s <= 0 or ext not in ("flac", "mp3"):
+        return False
+    response = client = None
+    sample_size = 256 * 1024
+    hdrs = {k: v for k, v in headers.items() if k.lower() not in ("range", "accept-encoding")}
+    hdrs.update({"Range": f"bytes=0-{sample_size - 1}", "Accept-Encoding": "identity"})
+    try:
+        if HAS_CURL_CFFI:
+            response = curl_requests.get(url, headers=hdrs, impersonate="chrome",
+                                         allow_redirects=True, stream=True,
+                                         timeout=CONF["request_timeout"])
+            chunks = response.iter_content(16 * 1024)
+        else:
+            client = httpx.Client(timeout=CONF["request_timeout"], follow_redirects=True)
+            response = client.send(client.build_request("GET", url, headers=hdrs), stream=True)
+            chunks = response.iter_bytes(16 * 1024)
+        content_type = response.headers.get("content-type", "").lower()
+        if (response.status_code not in (200, 206)
+                or any(x in content_type for x in ("text/", "json"))
+                or response.headers.get("content-encoding", "identity").lower() != "identity"):
+            return False
+        if response.status_code == 206:
+            match = re.fullmatch(r"bytes 0-\d+/(\d+)", response.headers.get("content-range", ""))
+            full_size = int(match[1]) if match else 0
+        else:
+            full_size = int(response.headers.get("content-length") or 0)
+        data = bytearray()
+        for chunk in chunks:
+            data.extend(chunk[:sample_size - len(data)])
+            if len(data) >= sample_size:
+                break
+        if ext == "flac":
+            from mutagen.flac import FLAC
+            actual_s = FLAC(io.BytesIO(data)).info.length
+        else:
+            from mutagen.mp3 import MPEGInfo
+            audio = MPEGInfo(_AudioSample(bytes(data), full_size))
+            if audio.sketchy:
+                return False
+            actual_s = audio.length
+        return (math.isfinite(actual_s) and actual_s > 0
+                and abs(actual_s - expected_s) <= max(3.0, expected_s * 0.02))
+    except Exception:
+        return False
+    finally:
+        if response is not None:
+            response.close()
+        if client is not None:
+            client.close()
+
+
+def _resolve_kuwo_entry_sync(entry: dict) -> tuple | None:
+    """Reuse musicdl's official plain-audio resolver for one cached Kuwo RID.
+
+    No keyword search, third-party resolver, credential injection or encrypted
+    format support is added. Its internal API is covered by the real-dependency
+    offline production contract. Timeout overrides only reach the official path
+    which does not also supply timeout=, avoiding duplicate keyword arguments.
+    """
+    from musicdl.modules.sources.kuwo import KuwoMusicClient
+    expected = entry["item"]
+    client = KuwoMusicClient(work_dir=CONF["work_dir"], max_retries=1, disable_print=True)
+    raw = {"MUSICRID": "MUSIC_" + expected["id"].split(":", 1)[1],
+           "SONGNAME": expected["title"], "ARTIST": expected.get("artist", ""),
+           "ALBUM": expected.get("album", ""), "DURATION": expected.get("duration_s", 0)}
+    try:
+        song = client._parsewithofficialapiv1(
+            search_result=raw, request_overrides={"timeout": CONF["request_timeout"]})
+        item = _normalize(song, entry["keyword"])
+        if item["id"] != expected["id"] or not _is_candidate_playable(song, item):
+            return None
+        headers = getattr(song, "default_download_headers", {}) or client.default_download_headers
+        if not _kuwo_audio_matches_sync(item["download_url"], headers, item["ext"],
+                                       float(expected.get("duration_s") or 0)):
+            return None
+        item.update(playback_status="verified", verified=True)
+        # Retain original discovery identity/cover rather than inferred quality.
+        for key in ("title", "artist", "album", "duration_s", "cover_url"):
+            if expected.get(key):
+                item[key] = expected[key]
+        return item, dict(headers), str(getattr(song, "lyric", "") or "")
+    finally:
+        for session in (getattr(client, "session", None),
+                        getattr(getattr(client, "audio_link_tester", None), "session", None),
+                        getattr(getattr(client, "quark_audio_link_tester", None), "session", None)):
+            if session is not None:
+                session.close()
 
 
 # --- 损坏流防护（2026-09-29 实测）-----------------------------------------
@@ -540,6 +734,10 @@ async def _maybe_downgrade(id: str, entry: dict, url: str, quality: str,
         else:
             base_headers = dict(entry.get("download_headers") or {})
         src_headers = base_headers
+    if "playback_status" in entry["item"] and url != entry["item"].get("download_url"):
+        if not await asyncio.to_thread(_kuwo_audio_matches_sync, url, src_headers, "mp3",
+                                       float(entry["item"].get("duration_s") or 0)):
+            raise HTTPException(502, f"replacement audio failed duration/stream validation for {id}")
     if range_header:
         src_headers["Range"] = range_header
     return url, src_headers
@@ -553,7 +751,7 @@ async def _resolve_entry(song_id: str, auto_refresh: bool = True):
     if fresh:
         return entry
     # URL 可能仍有效，探测一下
-    if entry["item"].get("download_url"):
+    if entry["item"].get("download_url") and "playback_status" not in entry["item"]:
         head_headers = dict(entry.get("download_headers") or {})
         valid = await asyncio.to_thread(_head_probe_sync, entry["item"]["download_url"], head_headers)
         if valid:
@@ -748,8 +946,7 @@ async def search(
                         ADAPTIVE.record_failure(source)
                     return source, items, "partial results (probe deadline reached)"
                 ADAPTIVE.record_success(source, latency)
-                if items:
-                    SOURCE_BREAKER.record_success(source, latency)
+                SOURCE_BREAKER.record_success(source, latency)
                 return source, items, None
             except SourceBusy as exc:
                 # Admission rejection is not another upstream failure.
@@ -774,7 +971,8 @@ async def search(
         results: list = []
         pending = {asyncio.create_task(one(s), name=s): s for s in active_src_list}
         overall = max(float(CONF["search_timeout"]), 4.0)
-        deadline = time.monotonic() + overall
+        overall_deadline = time.monotonic() + overall
+        deadline = overall_deadline
         skipped_fast_return = False
         while pending:
             remaining = deadline - time.monotonic()
@@ -804,12 +1002,15 @@ async def search(
             task.cancel()
         if pending:
             await asyncio.gather(*pending, return_exceptions=True)
-            skip_reason = "skipped (fast return)" if skipped_fast_return else f"timeout after {overall}s"
+            grace_return = deadline < overall_deadline
+            skip_reason = ("skipped (fast return)" if skipped_fast_return else
+                           "skipped (slow-source grace reached)" if grace_return else
+                           f"timeout after {overall}s")
             for task, src in pending.items():
                 items = collect(src)
                 results.append((src, items, skip_reason + (" (partial results)" if items else "")))
                 # 没等到歌才收紧。已经有结果、或因为别的源够了而提前返回，都不是这个源坏了。
-                if not items and not skipped_fast_return:
+                if not items and not skipped_fast_return and not grace_return:
                     ADAPTIVE.record_failure(src)
                     SOURCE_BREAKER.record_failure(src)
 
@@ -862,6 +1063,8 @@ async def info(id: str = Query(..., min_length=1)):
         "file_size": item.get("file_size"),
         "cover_url": item.get("cover_url"),
         "lyric": entry.get("lyric", ""),
+        **({"playback_status": item["playback_status"], "verified": item.get("verified") is True}
+           if "playback_status" in item else {}),
     }
 
 
@@ -913,6 +1116,11 @@ async def stream(
                 raise HTTPException(502, f"source returned {status} for {id} even after refresh")
         else:
             raise HTTPException(502, f"source returned {resp.status_code} for {id}")
+
+    content_type = resp.headers.get("content-type", "").lower()
+    if resp.status_code not in (200, 206) or any(x in content_type for x in ("text/", "json")):
+        resp.close()
+        raise HTTPException(502, f"source did not return audio for {id}")
 
     out_headers = {"Accept-Ranges": "bytes", "Cache-Control": "no-store"}
     for k in ("Content-Type", "Content-Length", "Content-Range"):
