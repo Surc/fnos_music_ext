@@ -394,8 +394,22 @@
           "stream": "502 after per-song resolve timeout; no redirect or verified claim",
           "fnos_device": "not_run"
         },
-        "submission_status": "submitting_via_authorized_github_browser",
-        "github_ci": "pending_pull_request"
+        "submission_status": "pull_request_open",
+        "pull_request": {
+          "number": 6,
+          "url": "https://github.com/Surc/fnos_music_ext/pull/6",
+          "merged": false
+        },
+        "github_ci": {
+          "url": "https://github.com/Surc/fnos_music_ext/actions/runs/38243434307",
+          "tested_head": "5413bec8202662e26612a0e9dd51d479614ddfb1",
+          "conclusion": "success",
+          "checks_passed": 11,
+          "pytest_passed_per_version": 1148,
+          "pytest_skipped_per_version": 4,
+          "python_versions": ["3.11", "3.13"],
+          "final_head_status": "see_pull_request_checks"
+        }
       }
     }
   ],
