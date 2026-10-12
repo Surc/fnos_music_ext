@@ -20,10 +20,14 @@
 第三方解析路径，其他平台的依赖问题没有全局修改。双来源采用基线、skill 1.0.0、
 VERSION 与正式 v2.8.0 保持原记录；不创建 Release，fnOS 实机验收待完成。
 
-提交状态：代码已在本地独立分支提交。GitHub 集成上传代码返回
-`403 Resource not accessible by integration`，CLI 推送也无可用登录凭据。
-经用户授权改用已登录 GitHub 网页提交独立分支；PR 与当前 head 的 CI
-结果将在提交完成后登记，不移动正式 tag。
+提交状态：[PR #6](https://github.com/Surc/fnos_music_ext/pull/6) 已提交至
+`Surc/fnos_music_ext:main`，尚未合并或发布。GitHub 集成上传返回 403 后，
+经用户授权使用已登录网页提交；远端代码文件树与本地已测试内容完全一致。
+代码 head `5413bec8202662e26612a0e9dd51d479614ddfb1` 的
+[PR CI](https://github.com/Surc/fnos_music_ext/actions/runs/38243434307)
+11 项检查均通过，Python 3.11 / 3.13 各 1148 passed、4 skipped。
+后续提交仅登记 PR 与该轮证据；最终 head 的状态以 PR Checks 为准。
+不移动正式 tag，双来源采用 SHA 与 skill 版本不变。
 
 ## 两个来源的采用基线
 

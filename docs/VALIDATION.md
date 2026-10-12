@@ -3,13 +3,14 @@
 ## 酷我搜索元数据与播放分离（2026-10-12，未发布）
 
 分支 `fix/kuwo-search-discovery`，基于 main `34782d1543fd9291613fc47395a8a02a835e16f1`。
-本节是本次实际本地结果；GitHub CI 以 PR 对应 head 的检查与 PR 验证记录为准，
+本节列出本地与 [PR #6](https://github.com/Surc/fnos_music_ext/pull/6) 的实际结果，
 不复用以前的 1116 或 857 项证据。调用链与真实接口细节见
 [KUWO_SEARCH_DIAGNOSIS.md](KUWO_SEARCH_DIAGNOSIS.md)。
 
 | 检查 | 实际结果 |
 | --- | --- |
 | Python 3.12 最终专项：酷我新用例、既有 musicdl search、代理 merge | 132 passed；包括新路径、原直链过滤、超时、熔断、过期重验与晚到缓存保护 |
+| GitHub Python 3.11 / 3.13 全工程 | [CI](https://github.com/Surc/fnos_music_ext/actions/runs/38243434307)，代码 head `5413bec8202662e26612a0e9dd51d479614ddfb1`；各 1148 passed、4 skipped，无失败；新增酷我真实音频头测试均执行 |
 | 真实生成的音频头 | FLAC、MP3 Xing、MP3 CBR 三类 12 秒音频；截取头样本仍识别全长，对 252 秒目标拒绝短音频；坏头、HTML/JSON、编码响应均拒绝 |
 | 真实 musicdl 2.14.1 离线生产合约 | passed；调用官方单 RID 私有解析接口，stub 网络和音频验证，无真实第三方请求，验证 timeout 参数与库返回结构 |
 | 全工程本地首轮 | 1090 passed、56 failed、3 skipped、2 errors；之后增加过期重验用例并完成上述最终专项 |
@@ -18,8 +19,12 @@
 | 静态检查 | 18 个 tracked .sh 的 bash -n、变更 Python 编译、git diff --check、来源/skill 校验通过 |
 | 真实酷我搜索 | 原唱 252 秒版 kuwo:142276943 在移动搜索首屏第 4 条；服务 request timeout=10 时返回 30 条并包含目标，待验证状态保持 false |
 | 真实酷我播放 | 单 RID 解析本轮超时，约 12.02 秒返回 502，没有重定向、没有 verified=true；不记为播放成功 |
-| Docker / FPK / Python 3.11 与 3.13 | 本地没有 Docker/fnpack；通过 GitHub 网页提交独立分支和 PR 后执行 CI，结果将在提交完成后登记 |
+| Docker / FPK / 生产依赖 | 同轮 11 项 CI 均成功：六组真实生产依赖合约、ShellCheck、Docker 非 root / 按需启动 / 下载补源与原生 Supervisor 合约、FPK 构建/包内检查/SHA256 校验通过；测试包未发布 |
 | fnOS 实机、真实 App 播放/下载 | 尚未执行 |
+
+四项既有跳过分别涉及日志 UID 1000 读取、两项安装日志共享权限所需的
+UID/GID 1000 条件、二维码 CJK 字体；未改跳过规则，不记作已执行通过。
+上述 CI 绑定代码 head；后续仅登记文档，最终 PR head 的检查见 PR Checks。
 
 默认网络请求 5 秒在当前环境会因约 6–7 秒的上游延迟返回 ReadTimeout；错误保留、
 不写成功空缓存。仅用于接口验证的 request timeout=10 没有修改工程默认配置。
