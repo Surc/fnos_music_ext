@@ -9,6 +9,36 @@ from pathlib import Path
 import subprocess
 import sys
 import tempfile
+from types import SimpleNamespace
+from unittest.mock import patch
+
+
+def check_musicdl(module):
+    """Real Kuwo parser + fake transport: single RID and timeout compatibility."""
+    from musicdl import musicdl
+    from musicdl.modules.sources.kuwo import KuwoMusicClient
+    from musicdl.modules.utils import AudioLinkTester
+    import curl_cffi
+    assert callable(musicdl.MusicClient) and curl_cffi.requests.Session
+    requests = []
+    def get(client, url, **kwargs):
+        requests.append((url, kwargs))
+        assert kwargs["timeout"] == module.CONF["request_timeout"]
+        return SimpleNamespace(text="http://audio.invalid/fixture.mp3", content=b"",
+                               raise_for_status=lambda: None)
+    checked = {"ok": True, "ext": "mp3", "file_size_bytes": 10_080_000,
+               "file_size": "9.61 MB", "download_url": "http://audio.invalid/fixture.mp3"}
+    entry = {"keyword": "DAYBREAK'S BELL", "item": {
+        "id": "kuwo:142276943", "source": "kuwo", "title": "DAYBREAK'S BELL",
+        "artist": "L'Arc〜en〜Ciel", "duration_s": 252, "playback_status": "unresolved"}}
+    with patch.object(KuwoMusicClient, "get", get), \
+            patch.object(AudioLinkTester, "test", return_value=checked), \
+            patch.object(module, "_kuwo_audio_matches_sync", return_value=True), \
+            patch.object(KuwoMusicClient, "_parsewiththirdpartapis", side_effect=AssertionError("unexpected third-party parse")):
+        item, _, _ = module._resolve_kuwo_entry_sync(entry)
+    assert item["id"] == entry["item"]["id"] and item["verified"] is True
+    assert "mobi.kuwo.cn/mobi.s" in requests[0][0]
+    assert len(requests) <= 3
 
 
 def check_musicbox():
@@ -66,10 +96,7 @@ def main():
         if args.service == "musicbox":
             check_musicbox()
         elif args.service == "musicdl":
-            from musicdl import musicdl
-            import curl_cffi
-            assert callable(musicdl.MusicClient)
-            assert curl_cffi.requests.Session
+            check_musicdl(module)
         else:
             from lxserver_client import SUPPORTED_PLATFORMS
             from verify_source import parse_script_meta
