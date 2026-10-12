@@ -807,6 +807,8 @@ def is_playable_online_track(item: dict, require_id: bool = False, allow_paywall
     """最终防线校验：过滤无音频流或试听标记的不可播曲目。"""
     if not isinstance(item, dict):
         return False
+    if item.get("playback_status") == "unresolved":
+        return False
 
     title = str(item.get("title") or item.get("name") or item.get("song_name") or "").strip()
     if not title:
@@ -870,6 +872,19 @@ def is_playable_online_track(item: dict, require_id: bool = False, allow_paywall
     return True
 
 
+def is_discoverable_online_track(item: dict, require_id: bool = False) -> bool:
+    """Kuwo metadata may be listed without claiming a verified playable URL."""
+    if (isinstance(item, dict) and item.get("source") == "kuwo"
+            and item.get("playback_status") == "unresolved"
+            and re.fullmatch(r"kuwo:[1-9][0-9]*", str(item.get("id") or ""))
+            and item.get("verified") is not True
+            and "download_url" not in item and "url" not in item):
+        candidate = dict(item)
+        candidate.pop("playback_status")
+        return is_playable_online_track(candidate, require_id=True, allow_paywall=True)
+    return is_playable_online_track(item, require_id=require_id)
+
+
 def _same_recording(left: dict, right: dict) -> bool:
     """Conservative identity: never strip live/remix/version markers."""
     for key in ("title", "artist", "version"):
@@ -888,7 +903,7 @@ def deduplicate_online_items(items: list[dict]) -> list[dict]:
     result: list[dict] = []
     seen = set()
     for item in items:
-        if not is_playable_online_track(item):
+        if not is_discoverable_online_track(item):
             continue
         guid = online_guid_from_item(item)
         if guid in seen:
@@ -1275,6 +1290,9 @@ def build_online_track(item: dict, mark_source: bool = False) -> dict:
         "bitrate": 1411000 if play_format in ("flac", "wav", "ape", "wv") else 320000,
     }
     audio_spec = {k: v for k, v in audio_spec.items() if v is not None}
+    if item.get("playback_status") == "unresolved":
+        for key in ("bitrate", "sampleRate", "bitDepth"):
+            audio_spec.pop(key, None)
 
     return {
         "guid": guid,
@@ -1307,6 +1325,8 @@ def build_online_track(item: dict, mark_source: bool = False) -> dict:
         "hasLyric": bool(item.get("lyric")),
         "genres": [],
         "accessStatus": 0,
+        **({"playback_status": "unresolved", "verified": False}
+           if item.get("playback_status") == "unresolved" else {}),
     }
 
 
@@ -2178,7 +2198,7 @@ async def fetch_musicdl_search(client: httpx.AsyncClient, keyword: str, limit: i
                 if isinstance(data, dict):
                     raw_items = data.get("items")
                     if isinstance(raw_items, list):
-                        data["items"] = [it for it in raw_items if is_playable_online_track(it)]
+                        data["items"] = [it for it in raw_items if is_discoverable_online_track(it)]
                     return data
         except Exception as e:
             logger.warning("Failed to fetch online search from musicdl: %s", e)
@@ -2666,7 +2686,7 @@ def merge_online_tracks(
         raw_page = raw_items
     filtered_online = []
     for online_item in raw_page:
-        if not is_playable_online_track(online_item, require_id=True):
+        if not is_discoverable_online_track(online_item, require_id=True):
             continue
         ot = str(online_item.get("title") or online_item.get("name") or "").strip().lower()
         oa = str(online_item.get("artist") or "").strip().lower()
@@ -2689,7 +2709,7 @@ def merge_online_tracks(
         orig_total = parent.get("total")
         if not isinstance(orig_total, int):
             orig_total = len(target_list) - len(page_online)
-        parent["total"] = orig_total + sum(1 for item in raw_items if is_playable_online_track(item, require_id=True) and (title_from_track(item), artist_from_track(item)) not in existing_keys)
+        parent["total"] = orig_total + sum(1 for item in raw_items if is_discoverable_online_track(item, require_id=True) and (title_from_track(item), artist_from_track(item)) not in existing_keys)
 
     return upstream_json
 
