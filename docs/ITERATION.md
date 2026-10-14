@@ -1,6 +1,28 @@
 # 迭代交接与来源记录
 
-记录日期：2026-10-12（Asia/Shanghai）。机器可读记录见 [SOURCE_VERSIONS.json](../SOURCE_VERSIONS.json)，续作入口见 [AGENTS.md](../AGENTS.md)。
+记录日期：2026-10-14（Asia/Shanghai）。机器可读记录见 [SOURCE_VERSIONS.json](../SOURCE_VERSIONS.json)，续作入口见 [AGENTS.md](../AGENTS.md)。
+
+## 2026-10-14 酷我单 RID 播放续查（PR #6 仍未合并/发布）
+
+在原 head `7b00ad42df5534b770d2644ea6f22769167a36b5` 接续，不覆盖正式 v2.8.0。
+真实 musicdl 2.14.1 调用到达 CDN/音频时长门：FLAC 接口 200 空正文，MP3/CDN
+200 但源站只交付 16009 字节、约 2.612 秒音频，与目标 252 秒不符。最新复测
+搜索 5.40 秒返回 30 条含目标，播放 19.58 秒正确拒绝为 502，info 未误标可播。
+尚不能判断权益、地区、出口或源策略中的具体原因；没有真实 fnOS 验收。
+
+修复单曲解析与搜索自适应预算耦合、歌词阻塞、代理 GET/HEAD 过早取消，以及
+无效 FLAC 挡住完整 MP3 的质量档选择。新增默认 resolve=30 秒 / 酷我代理
+startup=40 秒，保留音频头、时长、坏链/试听和无损解码/完整下载检查。
+提供不输出临时直链的分阶段日志与 `scripts/diagnose_kuwo.py`；NAS 操作、超时
+生效方法与验收分层见 [诊断记录](KUWO_SEARCH_DIAGNOSIS.md)。
+
+专项 78 passed；真实依赖离线合约覆盖合法 FLAC、坏 FLAC 回退合法 MP3、两档
+都无效，以及播放不请求可选歌词。GitHub 本轮证据以 PR 当前 head 的 Checks 为准，
+不沿用旧 1148 项结果；本地环境与验证范围见 [VALIDATION.md](VALIDATION.md)。
+本轮先完成本地提交并交付补丁；GitHub 写入接口返回 403 后，用户于
+2026-10-14 明确授权使用已登录网页提交最新补丁、新 CI 通过后合并，暂不发布。
+当前提交与 CI 状态以 PR 页面为准；不把旧 head 的 CI 用作新增代码证据。
+双来源采用 SHA、skill 1.0.0、VERSION、正式 tag 和附件均保持原记录。
 
 ## 2026-10-12 酷我搜索最小修复（未发布）
 

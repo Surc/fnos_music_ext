@@ -1,4 +1,29 @@
-# 集成版验证记录（2026-10-12）
+# 集成版验证记录（2026-10-14）
+
+## 酷我播放阶段续查（2026-10-14，PR #6 未合并/发布）
+
+基于既有 PR head `7b00ad42df5534b770d2644ea6f22769167a36b5` 接续。
+本次新增检查不以 2026-10-12 的 CI 通过代替；本轮远端完整结果看
+[PR #6 Checks](https://github.com/Surc/fnos_music_ext/pull/6/checks)。
+
+| 检查 | 本轮证据 |
+| --- | --- |
+| Python 3.12 酷我 + 代理专项 | 78 passed；含独立解析预算、超时不写晚到缓存、真实 252 秒 FLAC/MP3 头/服务 Range、GET 超过旧 6 秒与 HEAD 超过旧 4 秒可成功、stall 仍有界并关闭流、时长/坏头/错误 Range 拒绝 |
+| 既有转码/封面回归 | 77 passed；调整既有 httpx 测试桩以接受 timeout 参数，没有删除或跳过检查 |
+| 真实 musicdl 2.14.1 依赖离线合约 | passed；真实私有 RID 解析器与 AudioLinkTester，网络 stub；覆盖完整 FLAC、坏 FLAC 后完整 MP3、两档均拒绝、无新增第三方调用及无歌词阻塞 |
+| NAS 诊断脚本 | 标准库导入/CLI 检查、模拟本地服务 302 不跟随、不输出带 token 的 URL、代理最多读 1024 字节检查通过；未在 NAS 执行 |
+| 本地全工程最终 | 1101 passed、56 failed、3 skipped、2 errors；58 个失败/错误节点集合与原 PR head 对照完全相同；本地不称全工程通过 |
+| 原 PR head 同环境对照 | 本轮权限类 58 个节点在固定 `7b00ad4` 重跑为 56 failed、2 errors；涉及 Unix Socket、进程/属主和 FPK 前置条件 |
+| 真实平台搜索 | timeout=10，最新约 5.40 秒返回 30 条且含 kuwo:142276943 |
+| 真实平台播放 | 最新约 19.58 秒，FLAC 200 空正文；MP3 有地址、CDN HEAD 200，音频实际 2.612 秒/16009 字节，预期 252 秒；502，无 Location，info unresolved/verified=false |
+| 来源/静态检查 | 来源和 skill 摘要校验、Python 编译、diff 检查通过；VERSION / tag / 两来源采用基线未推进 |
+| GitHub CI / FPK / 容器 | GitHub 写入接口 403 后，已获用户授权通过网页提交；当前 head 的完整结果见 PR Checks，不把旧 CI 视为本轮通过。自动化与实际 NAS 验收分开记录 |
+| fnOS App 播放到结尾、拖动、完整下载/落库 | 未执行；真实目标完整资源当前出口仍未取得 |
+
+本地全工程结果已登记于来源记录；当前环境的权限失败不改为 skip。
+2026-10-12 最终 head `7b00ad4` 的历史 [CI](https://github.com/Surc/fnos_music_ext/actions/runs/38244422415)
+11 项成功、两版本各 1148 passed/4 skipped，仅作为旧 head 的证据。
+诊断阶段、超时设置、网络对照和 NAS 验收方法见 [KUWO_SEARCH_DIAGNOSIS.md](KUWO_SEARCH_DIAGNOSIS.md)。
 
 ## 酷我搜索元数据与播放分离（2026-10-12，未发布）
 

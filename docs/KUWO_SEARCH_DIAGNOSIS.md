@@ -5,6 +5,42 @@
 比较对象为 HotDownloader main `07e86c3d06243cf1350925c0dd3be704005abd29`，
 实际安装检查的 musicdl 为 2.14.1；生产依赖仍沿用 `musicdl>=2.14.0`。
 
+## 2026-10-14 播放 502 续查（仍未合并/发布）
+
+本轮仍使用真实 musicdl **2.14.1**，未注入账号、Cookie 或第三方解析源。
+最终代码的真实请求：搜索约 **5.40 秒**返回 30 条且包含目标；FLAC
+`convert_url2` HTTP 200 但正文为空；MP3 解析 HTTP 200 且返回地址；CDN HEAD
+HTTP 200，声明总长 **16,009 字节**。随后实际音频头解析得 **2.612 秒**，
+与搜索元数据 **252 秒**不符，`/stream` 约 **19.58 秒**返回 **502**，没有
+Location；`/info` 仍是 `unresolved / verified=false`。
+
+这次已到达音频时长验证阶段，拒播直接原因是源站交付异常短音频，不能以
+HTTP 200 或链接后缀当作完整歌曲。尚无证据判定是账号权益、地区/出口策略、
+酷我接口策略还是当前源文件问题；当前出口未能取得完整版本，也没有 fnOS
+或其他地区网络的对照结果。不能据此宣称歌曲在所有设备都不可用。
+
+此前代码也有可修复的预算和质量档问题：
+
+- 单 RID 解析复用搜索的自适应预算，默认 12 秒，慢搜索还可能缩到 8 秒。
+  实际调用有 FLAC/MP3 解析、CDN HEAD/GET、可选歌词、音频头 GET 等串行阶段。
+  本轮旧同步函数完整走完约 31.71 秒，12 秒不足以看到最终结果。
+- musicdl 在取得音频后仍同步请求 `newlyric.kuwo.cn`。当前播放适配器跳过该
+  可选请求并保留已有歌词缓存；不会因缺少歌词而阻止播放，也不改其他音源歌词流程。
+- 飞牛 GET 每次只给 6 秒、总计 12 秒，HEAD 只给 4 秒，即使服务后来能完成
+  验证，代理也会先取消。酷我现在用独立 40 秒启动窗口；其他平台的原有窗口保持。
+- 原先在库选中音质档后才做时长检查，坏 FLAC 可能挡住同 RID 的完整 MP3。
+  现在每个候选档在库停止尝试前就通过原有音频门；失败继续尝试 MP3，未放宽校验。
+
+`MUSICDL_RESOLVE_TIMEOUT` 默认 30 秒，与搜索熔断/自适应惩罚分开；官方取链和
+库探活的每次请求取剩余预算与网络超时的较小值。异步 deadline 到期后不会
+写入晚到的 verified 缓存，底层线程尚未退出时仍占用既有单源工作槽。
+时长门仍有网络空闲超时；40 秒代理窗口还需容纳 CDN 首字节与原有无损解码探针，
+慢链不保证一定在窗口内完成。没有通过禁用坏链、试听或解码检查换取成功。
+
+日志仅记录 RID、阶段、状态、实际时长/总字节、耗时和异常类型。禁用此单曲
+适配器中 musicdl 原始 URL 文件日志，并移除服务取流异常中的直链/原始异常文本。
+诊断脚本不跟随 302、不输出 Location、Cookie 或临时地址。
+
 ## 歌曲在哪个阶段消失
 
 | 阶段 | 原 main 的行为 | 本次证据与处理 |
@@ -85,3 +121,64 @@ curl -sS --get http://127.0.0.1:8768/stream \
 MUSICDL_SEARCH_TIMEOUT 与代理 FNMUSIC_SEARCH_TIMEOUT 覆盖实际网络预算。
 
 自动回归和实际限制见 [VALIDATION.md](VALIDATION.md)。
+
+## NAS 候选版本的分阶段诊断
+
+以下仅适用于已自行部署 **PR #6 候选代码**的测试环境；正式 v2.8.0 的 FPK
+没有这些新增日志和脚本。本轮没有向 NAS 部署、覆盖正式附件、移动 tag、合并 PR
+或创建发行。不要将通过自动化测试视作已安装/实机通过。
+
+在候选代码的仓库根目录运行（Python 标准库即可，不需要凭据）：
+
+```bash
+python3 scripts/diagnose_kuwo.py --service-url http://127.0.0.1:8768 --proxy
+```
+
+脚本依次输出 health、单源 search、无重定向跟随的 resolve、info；仅当解析得到
+302 后才经服务端代理读取最多 1024 字节。返回码 0 只表示该轮解析/首段读取成功，
+不代表完整下载、完整解码或 App 播放已验收。服务重启后必须先搜索恢复 RID 缓存。
+容器内服务端口是 8001，宿主默认 8768；实际非默认端口用 `--service-url` 指定。
+不要使用 `curl -v` / `curl -i` 分享音频响应头，Location 内可能有临时凭据。
+
+慢出口可在候选部署的 `.env` 临时设置：
+
+```dotenv
+MUSICDL_REQUEST_TIMEOUT=10
+MUSICDL_SEARCH_TIMEOUT=15
+MUSICDL_RESOLVE_TIMEOUT=30
+FNMUSIC_SEARCH_TIMEOUT=20
+FNMUSIC_KUWO_STARTUP_TIMEOUT=40
+```
+
+前三个超时由 musicdl **进程启动时**读取：`.env` 优先于继承的进程环境。
+原生测试部署按现有 `fnmusic-sources` 服务重启；Docker 测试部署重启 `musicdl`
+程序即可重新读取挂载的 `/repo/.env`。只改宿主 shell 的 export 不会改变已运行的
+容器/Supervisor 子进程。代理的两个 FNMUSIC 参数由现有 `.env` 观察器热重载；
+关闭观察器时需重启代理。服务 `/healthz.timeouts` 可确认有效的三个 musicdl 预算。
+必要时只按实测放大，例如 resolve=50 / startup=60，并相应提高脚本 `--timeout`；
+不能通过搜索超时替代播放预算，不能指望延长超时使 2.612 秒短音频变成完整歌曲。
+
+在管理页现有日志、Docker 的 `docker logs fnmusic-sources`，或原生部署的
+`sources-native/` 音源日志中查看下表；飞牛代理另看原有 proxy 日志：
+
+| 最后阶段/现象 | 可定位范围 | 需要的下一项对照 |
+| --- | --- | --- |
+| search errors / ReadTimeout | 搜索请求尚未取得有效元数据 | 有效 request/search 预算、NAS 到搜索端点连通性；单独 sources=kuwo 排除聚合宽限期 |
+| `rid_request` 后失败或 `rid_response` 无地址 | 官方单 RID 接口没有交付音频候选 | 状态与每档耗时；同 NAS 的直连/现有代理出口分别复测，不分享正文中的链接 |
+| `link_head` / `link_get` 超时或 4xx/5xx | 地址已取得，CDN 探活受阻 | NAS 的 DNS、出口、HTTP(S) 与 CDN 连通性；与官方解析接口故障区分 |
+| `audio_http` / `audio_header` / `audio_range` | 错误页、损坏/未知头或不合法 Range | 状态/异常类型与候选格式；保留拒绝，不用 HTTP 200 替代验证 |
+| `audio_duration outcome=mismatch` | 拿到音频但实际长度不符 | expected_s、actual_s、origin_bytes；本轮为 252 / 2.612 / 16009 |
+| `Refresh failed ... TimeoutError/SourceBusy` | 总解析预算耗尽或前一工作线程仍未退出 | 有效 resolve_timeout、前一轮最后阶段与耗时；待线程退出后重试，避免连续点击制造等待 |
+| 服务 302，但代理 `service_stream status=502` 或 `Stream startup failed ... TimeoutError` | 服务端后续代理取流/解码/启动窗口 | 带 --proxy 的首段测试、代理窗口、无损探针与实际客户端是否先发 HEAD |
+
+网络对照必须来自实际 NAS：同一 RID、同一候选代码、相同预算，在直连与用户已有
+可用代理出口各测一次；不改账号、不取消校验。若一侧超时另一侧取得完整音频，
+可支持网络环境差异；若两侧都取得相同短音频，只能认定两次测试未获得完整资源。
+本轮执行环境可访问搜索/官方解析/CDN，故最终 502 不是单纯连接超时；仍不能
+代替用户家庭网络，也不能排除地区/出口造成的资源差异。
+
+验收应分别记录：①目标出现在搜索；②服务 302 + info verified=true；
+③服务代理与飞牛代理 GET/HEAD/Range 的状态和首字节；④fnOS App 能播放到
+252 秒结尾、拖动正常；⑤完整下载落库并解码成功，未混入其他 RID/电视剪辑。
+本轮仅自动化验证了完整 252 秒合成 FLAC/MP3 的时长门与服务 Range 字节路径、
+慢首字节的代理 GET/HEAD、错误音频拒绝和真实依赖离线合约；真实目标的②—⑤未通过。
