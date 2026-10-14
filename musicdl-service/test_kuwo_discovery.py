@@ -182,6 +182,7 @@ def test_resolver_timeout_cannot_publish_late_playable_cache(clean_state, monkey
     item = discover(monkeypatch)
     release, started = threading.Event(), threading.Event()
     monkeypatch.setattr(app_module, "ADAPTIVE", AdaptiveTimeout(0.05, 0.05))
+    monkeypatch.setitem(app_module.CONF, "resolve_timeout", 0.05)
 
     def resolve(entry):
         started.set()
@@ -286,3 +287,97 @@ async def test_lossless_replacement_preview_is_rejected(clean_state, monkeypatch
     with pytest.raises(app_module.HTTPException) as error:
         await app_module._maybe_downgrade("kuwo:" + RID, entry, entry["item"]["download_url"], "", None)
     assert error.value.status_code == 502
+
+
+def test_playback_deadline_is_independent_of_search_penalty(clean_state, monkeypatch):
+    from hardening import AdaptiveTimeout
+    import time
+    item = discover(monkeypatch)
+    mock_resolver(monkeypatch)
+    original = app_module._resolve_kuwo_entry_sync
+    def resolve(entry):
+        time.sleep(0.04)
+        return original(entry)
+    monkeypatch.setattr(app_module, '_resolve_kuwo_entry_sync', resolve)
+    monkeypatch.setattr(app_module, 'ADAPTIVE', AdaptiveTimeout(0.01, 0.01))
+    monkeypatch.setitem(app_module.CONF, 'resolve_timeout', 0.5)
+    with TestClient(app_module.app) as client:
+        assert client.get('/stream', params={'id': item['id']}, follow_redirects=False).status_code == 302
+        assert client.get('/healthz').json()['timeouts']['resolve_timeout'] == 0.5
+
+
+@pytest.mark.parametrize('value,expected', [('10', 10), ('nan', 5), ('0', 5), ('bad', 5)])
+def test_current_env_file_controls_service_timeout(tmp_path, monkeypatch, value, expected):
+    env_file = tmp_path / 'source.env'
+    env_file.write_text('MUSICDL_REQUEST_TIMEOUT=' + value + '\n')
+    monkeypatch.setenv('FNMUSIC_ENV_FILE', str(env_file))
+    monkeypatch.setenv('MUSICDL_REQUEST_TIMEOUT', '2')
+    assert app_module._startup_timeout('MUSICDL_REQUEST_TIMEOUT', 5) == expected
+    env_file.unlink()
+    assert app_module._startup_timeout('MUSICDL_REQUEST_TIMEOUT', 5) == 2
+
+
+@pytest.mark.skipif(ffmpeg_path is None, reason='ffmpeg required for real audio fixtures')
+@pytest.mark.parametrize('ext', ['flac', 'mp3'])
+def test_complete_252_second_audio_passes_service_and_proxy_stream(clean_state, tmp_path, monkeypatch, ext):
+    """Real header/duration gate, then actual /stream?proxy=true byte handling."""
+    with monkeypatch.context() as search_patch:
+        item = discover(search_patch)
+    real_gate = app_module._kuwo_audio_matches_sync
+    mock_resolver(monkeypatch)
+    # Restore the actual gate: this test must not accept based on mocked validity.
+    monkeypatch.setattr(app_module, '_kuwo_audio_matches_sync', real_gate)
+    path = tmp_path / ('full.' + ext)
+    subprocess.run([ffmpeg_path, '-v', 'error', '-f', 'lavfi', '-i', 'sine=duration=252',
+                    '-c:a', 'flac' if ext == 'flac' else 'libmp3lame', str(path)],
+                   check=True, timeout=20)
+    full = path.read_bytes()
+    original_client = httpx.Client
+    def handler(request):
+        sample = full[:256 * 1024]
+        return httpx.Response(206, headers={'content-type': 'audio/' + ext,
+            'content-range': f'bytes 0-{len(sample)-1}/{len(full)}'}, content=sample)
+    monkeypatch.setattr(app_module, 'HAS_CURL_CFFI', False)
+    monkeypatch.setattr(httpx, 'Client', lambda **kw: original_client(transport=httpx.MockTransport(handler), **kw))
+    # Fake musicdl's parse output, retaining the real audio gate for both formats.
+    from musicdl.modules.sources.kuwo import KuwoMusicClient
+    original_parse = KuwoMusicClient._parsewithofficialapiv1
+    def parse(self, **kwargs):
+        song = original_parse(self, **kwargs)
+        song.ext = ext
+        return song
+    monkeypatch.setattr(KuwoMusicClient, '_parsewithofficialapiv1', parse)
+    async def upstream(url, headers):
+        return types.SimpleNamespace(status_code=206, headers={'content-type': 'audio/' + ext,
+            'content-range': f'bytes 0-1023/{len(full)}', 'content-length': '1024'},
+            iter_content=lambda size: iter([full[:1024]]), close=lambda: None)
+    async def no_lossless_downgrade(*args):
+        return True
+    monkeypatch.setattr(app_module, '_head_probe', no_lossless_downgrade)
+    monkeypatch.setattr(app_module, '_fetch_upstream_stream', upstream)
+    with TestClient(app_module.app) as client:
+        response = client.get('/stream', params={'id': item['id'], 'proxy': 'true'}, headers={'Range': 'bytes=0-1023'})
+        assert response.status_code == 206 and response.content == full[:1024]
+        assert client.get('/info', params={'id': item['id']}).json()['verified'] is True
+    # Even a valid FLAC header cannot rescue a response from the wrong offset.
+    def bad_range(request):
+        return httpx.Response(206, headers={'content-range': f'bytes 10-100/{len(full)}'}, content=full[:1024])
+    monkeypatch.setattr(httpx, 'Client', lambda **kw: original_client(transport=httpx.MockTransport(bad_range), **kw))
+    assert not real_gate('http://audio.invalid/full', {}, ext, 252)
+
+
+def test_stream_transport_exception_does_not_leak_url_or_credentials(clean_state, monkeypatch, caplog):
+    item = discover(monkeypatch)
+    mock_resolver(monkeypatch)
+    secret = 'https://audio.invalid/file.mp3?token=private-fixture'
+    async def failed(*args):
+        raise httpx.ReadError(secret)
+    async def no_refresh(*args):
+        return None
+    monkeypatch.setattr(app_module, '_fetch_upstream_stream', failed)
+    with TestClient(app_module.app) as client:
+        assert client.get('/stream', params={'id': item['id']}, follow_redirects=False).status_code == 302
+        monkeypatch.setattr(app_module, '_refresh_by_keyword', no_refresh)
+        response = client.get('/stream', params={'id': item['id'], 'proxy': 'true'})
+    assert response.status_code == 502
+    assert secret not in response.text and secret not in caplog.text

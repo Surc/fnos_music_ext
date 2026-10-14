@@ -19,6 +19,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed, TimeoutError as
 from contextlib import asynccontextmanager, suppress
 from pathlib import Path
 from types import SimpleNamespace
+from urllib.parse import urlsplit
 
 import httpx
 from fastapi import FastAPI, Header, HTTPException, Query, Request
@@ -27,6 +28,7 @@ from fastapi.responses import JSONResponse, RedirectResponse, Response, Streamin
 logger = logging.getLogger("musicdl_service")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logging.getLogger("musicdl").setLevel(logging.ERROR)
+logging.getLogger("httpx").setLevel(logging.WARNING)  # CDN URLs may contain temporary tokens.
 
 try:
     from curl_cffi import requests as curl_requests
@@ -82,9 +84,29 @@ def _startup_sources() -> "tuple[list[str], str]":
 
 _CONF_SOURCES, _SOURCES_ORIGIN = _startup_sources()
 
+
+def _startup_timeout(key: str, default: float) -> float:
+    """Use current NAS .env on restart, rather than stale Supervisor exports."""
+    raw = os.environ.get(key, str(default))
+    if parse_env_file is not None:
+        try:
+            values, _ = parse_env_file(Path(os.environ.get("FNMUSIC_ENV_FILE", "/repo/.env")))
+            raw = dict(values).get(key) or raw
+        except OSError:
+            pass
+    try:
+        value = float(raw)
+        if math.isfinite(value) and value > 0:
+            return max(0.1, value)
+    except (TypeError, ValueError):
+        pass
+    logger.warning("Invalid %s; using default timeout %s", key, default)
+    return default
+
+
 CONF = {
     "sources": _CONF_SOURCES,
-    "search_timeout": float(os.environ.get("MUSICDL_SEARCH_TIMEOUT", "12")),
+    "search_timeout": _startup_timeout("MUSICDL_SEARCH_TIMEOUT", 12),
     "limit_per_source": int(os.environ.get("MUSICDL_LIMIT_PER_SOURCE", "10")),
     "url_ttl": int(os.environ.get("MUSICDL_URL_TTL", "1800")),
     "cache_max": int(os.environ.get("MUSICDL_CACHE_MAX", "3000")),
@@ -94,7 +116,9 @@ CONF = {
     "breaker_threshold": int(os.environ.get("MUSICDL_BREAKER_THRESHOLD", "4")),
     "breaker_cooldown": int(os.environ.get("MUSICDL_BREAKER_COOLDOWN", "120")),
     # Network inactivity timeout is separate from the async response deadline.
-    "request_timeout": max(0.1, float(os.environ.get("MUSICDL_REQUEST_TIMEOUT", "5"))),
+    "request_timeout": _startup_timeout("MUSICDL_REQUEST_TIMEOUT", 5),
+    # RID resolution includes several sequential requests, unlike metadata search.
+    "resolve_timeout": _startup_timeout("MUSICDL_RESOLVE_TIMEOUT", 30),
     "neg_cache_ttl": int(os.environ.get("MUSICDL_NEG_TTL", "30")),
     # 自适应熔断/降级
     "slow_degrade_s": float(os.environ.get("MUSICDL_SLOW_DEGRADE_S", "8")),
@@ -471,6 +495,7 @@ async def _refresh_by_keyword(song_id: str) -> dict | None:
         limit = max(CONF["limit_per_source"], 10)
         timeout = ADAPTIVE.timeout_for(src_client)
         if src_client == "KuwoMusicClient" and "playback_status" in entry["item"]:
+            timeout = CONF["resolve_timeout"]
             # Resolve exactly this RID, even if it is now outside the first page.
             pending = dict(entry["item"])
             pending.pop("download_url", None)
@@ -485,7 +510,7 @@ async def _refresh_by_keyword(song_id: str) -> dict | None:
                 time.monotonic() + timeout, timeout=timeout,
             )
     except Exception as exc:
-        logger.warning("Refresh failed for %s: %s", song_id, exc)
+        logger.warning("Refresh failed for %s: %s", song_id, type(exc).__name__)
         return None
     for item, headers, lyric in entries:
         _cache_put(item, entry["keyword"], headers, lyric)
@@ -520,6 +545,8 @@ def _kuwo_audio_matches_sync(url: str, headers: dict, ext: str, expected_s: floa
     sample_size = 256 * 1024
     hdrs = {k: v for k, v in headers.items() if k.lower() not in ("range", "accept-encoding")}
     hdrs.update({"Range": f"bytes=0-{sample_size - 1}", "Accept-Encoding": "identity"})
+    started = time.monotonic()
+    stage = "audio_open"
     try:
         if HAS_CURL_CFFI:
             response = curl_requests.get(url, headers=hdrs, impersonate="chrome",
@@ -534,17 +561,24 @@ def _kuwo_audio_matches_sync(url: str, headers: dict, ext: str, expected_s: floa
         if (response.status_code not in (200, 206)
                 or any(x in content_type for x in ("text/", "json"))
                 or response.headers.get("content-encoding", "identity").lower() != "identity"):
+            logger.warning("Kuwo audio gate: stage=audio_http status=%s outcome=rejected",
+                           response.status_code)
             return False
         if response.status_code == 206:
             match = re.fullmatch(r"bytes 0-\d+/(\d+)", response.headers.get("content-range", ""))
-            full_size = int(match[1]) if match else 0
+            if not match:
+                logger.warning("Kuwo audio gate: stage=audio_range outcome=invalid_range")
+                return False
+            full_size = int(match[1])
         else:
             full_size = int(response.headers.get("content-length") or 0)
+        stage = "audio_read"
         data = bytearray()
         for chunk in chunks:
             data.extend(chunk[:sample_size - len(data)])
             if len(data) >= sample_size:
                 break
+        stage = "audio_header"
         if ext == "flac":
             from mutagen.flac import FLAC
             actual_s = FLAC(io.BytesIO(data)).info.length
@@ -552,11 +586,18 @@ def _kuwo_audio_matches_sync(url: str, headers: dict, ext: str, expected_s: floa
             from mutagen.mp3 import MPEGInfo
             audio = MPEGInfo(_AudioSample(bytes(data), full_size))
             if audio.sketchy:
+                logger.warning("Kuwo audio gate: stage=audio_header outcome=sketchy_mp3")
                 return False
             actual_s = audio.length
-        return (math.isfinite(actual_s) and actual_s > 0
-                and abs(actual_s - expected_s) <= max(3.0, expected_s * 0.02))
-    except Exception:
+        matches = (math.isfinite(actual_s) and actual_s > 0
+                   and abs(actual_s - expected_s) <= max(3.0, expected_s * 0.02))
+        logger.info("Kuwo audio gate: stage=audio_duration outcome=%s ext=%s expected_s=%.3f actual_s=%.3f origin_bytes=%d elapsed_s=%.3f",
+                    "accepted" if matches else "mismatch", ext, expected_s, actual_s,
+                    full_size, time.monotonic() - started)
+        return matches
+    except Exception as exc:
+        logger.warning("Kuwo audio gate: stage=%s outcome=%s elapsed_s=%.3f",
+                       stage, type(exc).__name__, time.monotonic() - started)
         return False
     finally:
         if response is not None:
@@ -575,26 +616,107 @@ def _resolve_kuwo_entry_sync(entry: dict) -> tuple | None:
     """
     from musicdl.modules.sources.kuwo import KuwoMusicClient
     expected = entry["item"]
-    client = KuwoMusicClient(work_dir=CONF["work_dir"], max_retries=1, disable_print=True)
+    song_id = expected["id"]
+    started = time.monotonic()
+    deadline = started + CONF["resolve_timeout"]
+
+    def request_budget():
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise TimeoutError("Kuwo resolution deadline exceeded")
+        return min(CONF["request_timeout"], remaining)
+
+    class PlaybackClient(KuwoMusicClient):
+        def get(self, url, **kwargs):
+            if urlsplit(url).hostname == "newlyric.kuwo.cn":
+                # The parser fetches optional lyrics AFTER obtaining valid audio.
+                # Do not spend the playback deadline on an unrelated endpoint.
+                return None
+            logger.info("Kuwo playback: id=%s stage=rid_request outcome=start", song_id)
+            kwargs["timeout"] = request_budget()
+            response = super().get(url, **kwargs)
+            logger.info("Kuwo playback: id=%s stage=rid_response status=%s has_url=%s elapsed_s=%.3f",
+                        song_id, getattr(response, "status_code", None),
+                        bool(re.search(r'http[^\s$\"]+', getattr(response, "text", ""))),
+                        time.monotonic() - started)
+            return response
+
+    # musicdl's default logger writes raw request URLs/exceptions to its own file
+    # even with disable_print=True. Only our stage summaries may be persisted.
+    def safe_library_error(message, **kwargs):
+        outcome = "transport_timeout" if re.search(r"timeout|timed out", str(message), re.I) else "transport_error"
+        logger.warning("Kuwo playback: id=%s stage=rid_request outcome=%s", song_id, outcome)
+
+    quiet_log = SimpleNamespace(error=safe_library_error,
+                               **{level: lambda *a, **kw: None
+                                  for level in ("info", "warning", "debug")})
+    client = PlaybackClient(work_dir=CONF["work_dir"], max_retries=1, disable_print=True,
+                            logger_handle=quiet_log, maintain_session=True)
+    tester = getattr(client, "audio_link_tester", None)
+    verified_audio = set()
+    if tester is not None:
+        original_request = tester.request
+        original_test = tester.test
+
+        def checked_request(method, *args, **kwargs):
+            stage = "link_" + method.lower()
+            logger.info("Kuwo playback: id=%s stage=%s outcome=start", song_id, stage)
+            try:
+                kwargs["request_overrides"] = {**(kwargs.get("request_overrides") or {}),
+                                               "timeout": request_budget()}
+                result = original_request(method, *args, **kwargs)
+                logger.info("Kuwo playback: id=%s stage=%s status=%s elapsed_s=%.3f",
+                            song_id, stage, result.get("status_code"), time.monotonic() - started)
+                return result
+            except Exception as exc:
+                logger.warning("Kuwo playback: id=%s stage=%s outcome=%s elapsed_s=%.3f",
+                               song_id, stage, type(exc).__name__, time.monotonic() - started)
+                raise
+        tester.request = checked_request
+
+        def checked_test(url, **kwargs):
+            result = dict(original_test(url=url, **kwargs))
+            if result.get("ok"):
+                audio_url = result.get("download_url") or url
+                ext = result.get("ext")
+                logger.info("Kuwo playback: id=%s stage=audio_validate ext=%s", song_id, ext)
+                result["ok"] = _kuwo_audio_matches_sync(
+                    audio_url, client.default_download_headers, ext,
+                    float(expected.get("duration_s") or 0))
+                if result["ok"]:
+                    verified_audio.add((audio_url, ext))
+            # Reject a short/bad FLAC BEFORE musicdl stops trying quality tiers;
+            # a complete MP3 for the same RID may still be available.
+            return result
+        tester.test = checked_test
     raw = {"MUSICRID": "MUSIC_" + expected["id"].split(":", 1)[1],
            "SONGNAME": expected["title"], "ARTIST": expected.get("artist", ""),
            "ALBUM": expected.get("album", ""), "DURATION": expected.get("duration_s", 0)}
     try:
+        logger.info("Kuwo playback: id=%s stage=rid_resolve outcome=start request_timeout_s=%s resolve_timeout_s=%s",
+                    song_id, CONF["request_timeout"], CONF["resolve_timeout"])
         song = client._parsewithofficialapiv1(
             search_result=raw, request_overrides={"timeout": CONF["request_timeout"]})
         item = _normalize(song, entry["keyword"])
         if item["id"] != expected["id"] or not _is_candidate_playable(song, item):
+            logger.warning("Kuwo playback: id=%s stage=rid_resolve outcome=no_candidate elapsed_s=%.3f",
+                           song_id, time.monotonic() - started)
             return None
         headers = getattr(song, "default_download_headers", {}) or client.default_download_headers
-        if not _kuwo_audio_matches_sync(item["download_url"], headers, item["ext"],
-                                       float(expected.get("duration_s") or 0)):
+        if ((item["download_url"], item["ext"]) not in verified_audio
+                and not _kuwo_audio_matches_sync(item["download_url"], headers, item["ext"],
+                                                float(expected.get("duration_s") or 0))):
+            return None
+        if time.monotonic() >= deadline:
             return None
         item.update(playback_status="verified", verified=True)
+        logger.info("Kuwo playback: id=%s stage=verified elapsed_s=%.3f",
+                    song_id, time.monotonic() - started)
         # Retain original discovery identity/cover rather than inferred quality.
         for key in ("title", "artist", "album", "duration_s", "cover_url"):
             if expected.get(key):
                 item[key] = expected[key]
-        return item, dict(headers), str(getattr(song, "lyric", "") or "")
+        return item, dict(headers), str(getattr(song, "lyric", "") or entry.get("lyric", ""))
     finally:
         for session in (getattr(client, "session", None),
                         getattr(getattr(client, "audio_link_tester", None), "session", None),
@@ -847,6 +969,7 @@ async def healthz():
         "cache_entries": len(SEARCH_CACHE),
         "breaker_open": SOURCE_BREAKER.get_open_sources(),
         "adaptive_timeouts": ADAPTIVE.stats(),
+        "timeouts": {k: CONF[k] for k in ("request_timeout", "search_timeout", "resolve_timeout")},
         "stats": _STATS,
     }
 
@@ -1088,7 +1211,7 @@ async def stream(
     except HTTPException:
         raise
     except Exception as e:
-        logger.warning("Stream request failed for %s (%s), attempting refresh: %s", id, url, e)
+        logger.warning("Stream request failed for %s, attempting refresh: %s", id, type(e).__name__)
         refreshed_entry = await _refresh_by_keyword(id)
         if refreshed_entry and refreshed_entry["item"].get("download_url"):
             entry = refreshed_entry
@@ -1096,7 +1219,7 @@ async def stream(
             url, src_headers = await _maybe_downgrade(id, entry, url, quality, range_header)
             resp = await _fetch_upstream_stream(url, src_headers)
         else:
-            raise HTTPException(502, f"failed to fetch stream from source for {id}: {e}")
+            raise HTTPException(502, f"failed to fetch stream from source for {id}: {type(e).__name__}")
 
     # 若源站返回 4xx/5xx，尝试刷新一次
     if resp.status_code >= 400:
