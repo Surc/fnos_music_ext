@@ -1027,8 +1027,9 @@ def test_open_stream_blacklisted_guid_requests_mp3(env):
     captured = {}
 
     class _FakeClient:
-        def build_request(self, method, url, params=None, headers=None):
+        def build_request(self, method, url, params=None, headers=None, timeout=None):
             captured["params"] = params
+            assert timeout >= appmod.CONF["kuwo_startup_timeout"]
             resp = httpx.Response(200, stream=_Whole(b"ID3xyz"),
                                   headers={"content-length": "6",
                                            "content-type": "audio/mpeg"})

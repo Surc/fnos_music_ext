@@ -2155,6 +2155,30 @@ def test_is_playable_online_track_defense():
     assert is_playable_online_track({"id": "kuwo:101", "title": "晴天", "artist": "周杰伦", "download_url": "http://cdn.com/101.mp3"})
 
 
+@pytest.mark.anyio
+async def test_kuwo_unresolved_metadata_survives_fetch_dedup_and_merge():
+    from proxy import app as module
+    target = {"id": "kuwo:142276943", "source": "kuwo", "title": "DAYBREAK'S BELL",
+              "artist": "L'Arc〜en〜Ciel", "duration_s": 252,
+              "playback_status": "unresolved", "verified": False}
+    async with httpx.AsyncClient(base_url="http://musicdl.test", transport=httpx.MockTransport(
+            lambda req: httpx.Response(200, json={"ok": True, "items": [target], "errors": {}}))) as client:
+        data = await module.fetch_musicdl_search(client, target["title"], 30)
+    assert data["items"] == [target]
+    assert not module.is_playable_online_track(target)
+    assert module.is_discoverable_online_track(target, require_id=True)
+    items = module.deduplicate_online_items(data["items"])
+    merged = module.merge_online_tracks({"code": 0, "data": {"list": [], "total": 0}}, items)
+    assert merged["data"]["total"] == 1
+    track = merged["data"]["list"][0]
+    assert track["playback_status"] == "unresolved" and track["verified"] is False
+    assert "bitrate" not in track["audioSpec"] and "sampleRate" not in track["audioSpec"]
+    for changes in ({"is_trial": True}, {"has_stream": False}, {"playable": False},
+                    {"source": "migu"}, {"verified": True}, {"download_url": ""},
+                    {"download_url": "http://bad.invalid/404/error.html"}):
+        assert not module.is_discoverable_online_track({**target, **changes})
+
+
 def test_merge_online_tracks_filters_unplayable_defense():
     from proxy.app import merge_online_tracks
 

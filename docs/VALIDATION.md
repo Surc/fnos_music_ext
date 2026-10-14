@@ -1,4 +1,61 @@
-# 集成版验证记录（2026-10-11）
+# 集成版验证记录（2026-10-14）
+
+## 酷我播放阶段续查（2026-10-14，PR #6 未合并/发布）
+
+基于既有 PR head `7b00ad42df5534b770d2644ea6f22769167a36b5` 接续。
+本次新增检查不以 2026-10-12 的 CI 通过代替；本轮远端完整结果看
+[PR #6 Checks](https://github.com/Surc/fnos_music_ext/pull/6/checks)。
+
+| 检查 | 本轮证据 |
+| --- | --- |
+| Python 3.12 酷我 + 代理专项 | 78 passed；含独立解析预算、超时不写晚到缓存、真实 252 秒 FLAC/MP3 头/服务 Range、GET 超过旧 6 秒与 HEAD 超过旧 4 秒可成功、stall 仍有界并关闭流、时长/坏头/错误 Range 拒绝 |
+| 既有转码/封面回归 | 77 passed；调整既有 httpx 测试桩以接受 timeout 参数，没有删除或跳过检查 |
+| 真实 musicdl 2.14.1 依赖离线合约 | passed；真实私有 RID 解析器与 AudioLinkTester，网络 stub；覆盖完整 FLAC、坏 FLAC 后完整 MP3、两档均拒绝、无新增第三方调用及无歌词阻塞 |
+| NAS 诊断脚本 | 标准库导入/CLI 检查、模拟本地服务 302 不跟随、不输出带 token 的 URL、代理最多读 1024 字节检查通过；未在 NAS 执行 |
+| 本地全工程最终 | 1101 passed、56 failed、3 skipped、2 errors；58 个失败/错误节点集合与原 PR head 对照完全相同；本地不称全工程通过 |
+| 原 PR head 同环境对照 | 本轮权限类 58 个节点在固定 `7b00ad4` 重跑为 56 failed、2 errors；涉及 Unix Socket、进程/属主和 FPK 前置条件 |
+| 真实平台搜索 | timeout=10，最新约 5.40 秒返回 30 条且含 kuwo:142276943 |
+| 真实平台播放 | 最新约 19.58 秒，FLAC 200 空正文；MP3 有地址、CDN HEAD 200，音频实际 2.612 秒/16009 字节，预期 252 秒；502，无 Location，info unresolved/verified=false |
+| 来源/静态检查 | 来源和 skill 摘要校验、Python 编译、diff 检查通过；VERSION / tag / 两来源采用基线未推进 |
+| GitHub CI / FPK / 容器 | GitHub 写入接口 403 后，已获用户授权通过网页提交；当前 head 的完整结果见 PR Checks，不把旧 CI 视为本轮通过。自动化与实际 NAS 验收分开记录 |
+| fnOS App 播放到结尾、拖动、完整下载/落库 | 未执行；真实目标完整资源当前出口仍未取得 |
+
+本地全工程结果已登记于来源记录；当前环境的权限失败不改为 skip。
+2026-10-12 最终 head `7b00ad4` 的历史 [CI](https://github.com/Surc/fnos_music_ext/actions/runs/38244422415)
+11 项成功、两版本各 1148 passed/4 skipped，仅作为旧 head 的证据。
+诊断阶段、超时设置、网络对照和 NAS 验收方法见 [KUWO_SEARCH_DIAGNOSIS.md](KUWO_SEARCH_DIAGNOSIS.md)。
+
+## 酷我搜索元数据与播放分离（2026-10-12，未发布）
+
+分支 `fix/kuwo-search-discovery`，基于 main `34782d1543fd9291613fc47395a8a02a835e16f1`。
+本节列出本地与 [PR #6](https://github.com/Surc/fnos_music_ext/pull/6) 的实际结果，
+不复用以前的 1116 或 857 项证据。调用链与真实接口细节见
+[KUWO_SEARCH_DIAGNOSIS.md](KUWO_SEARCH_DIAGNOSIS.md)。
+
+| 检查 | 实际结果 |
+| --- | --- |
+| Python 3.12 最终专项：酷我新用例、既有 musicdl search、代理 merge | 132 passed；包括新路径、原直链过滤、超时、熔断、过期重验与晚到缓存保护 |
+| GitHub Python 3.11 / 3.13 全工程 | [CI](https://github.com/Surc/fnos_music_ext/actions/runs/38243434307)，代码 head `5413bec8202662e26612a0e9dd51d479614ddfb1`；各 1148 passed、4 skipped，无失败；新增酷我真实音频头测试均执行 |
+| 真实生成的音频头 | FLAC、MP3 Xing、MP3 CBR 三类 12 秒音频；截取头样本仍识别全长，对 252 秒目标拒绝短音频；坏头、HTML/JSON、编码响应均拒绝 |
+| 真实 musicdl 2.14.1 离线生产合约 | passed；调用官方单 RID 私有解析接口，stub 网络和音频验证，无真实第三方请求，验证 timeout 参数与库返回结构 |
+| 全工程本地首轮 | 1090 passed、56 failed、3 skipped、2 errors；之后增加过期重验用例并完成上述最终专项 |
+| 原 main 同环境对照 | 对首轮全部 58 个失败/错误节点在固定 main 重跑，仍为相同 56 failed、2 errors，节点集合一致；没有将这些检查删除或改为 skip |
+| 权限限制范围 | 当前环境禁止 Unix Socket、部分属主/进程身份操作；部署、网关、日志权限和 FPK 前置条件测试受影响，不能称本地全工程通过 |
+| 静态检查 | 18 个 tracked .sh 的 bash -n、变更 Python 编译、git diff --check、来源/skill 校验通过 |
+| 真实酷我搜索 | 原唱 252 秒版 kuwo:142276943 在移动搜索首屏第 4 条；服务 request timeout=10 时返回 30 条并包含目标，待验证状态保持 false |
+| 真实酷我播放 | 单 RID 解析本轮超时，约 12.02 秒返回 502，没有重定向、没有 verified=true；不记为播放成功 |
+| Docker / FPK / 生产依赖 | 同轮 11 项 CI 均成功：六组真实生产依赖合约、ShellCheck、Docker 非 root / 按需启动 / 下载补源与原生 Supervisor 合约、FPK 构建/包内检查/SHA256 校验通过；测试包未发布 |
+| fnOS 实机、真实 App 播放/下载 | 尚未执行 |
+
+四项既有跳过分别涉及日志 UID 1000 读取、两项安装日志共享权限所需的
+UID/GID 1000 条件、二维码 CJK 字体；未改跳过规则，不记作已执行通过。
+上述 CI 绑定代码 head；后续仅登记文档，最终 PR head 的检查见 PR Checks。
+
+默认网络请求 5 秒在当前环境会因约 6–7 秒的上游延迟返回 ReadTimeout；错误保留、
+不写成功空缓存。仅用于接口验证的 request timeout=10 没有修改工程默认配置。
+聚合宽限期取消现在与真实上游失败区分，合法空响应会重置旧源失败计数。
+其他平台依赖内部的重复 timeout 问题没有全局修复。下载补源仍执行完整音频与
+音质/身份检查；头部时长验证不能替代完整文件验收。
 
 ## 原工程 v2.8.0 合并（2026-10-11）
 

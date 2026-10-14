@@ -468,15 +468,15 @@ def test_musicdl_receives_supported_network_limits(clean_state, monkeypatch):
         def search(self, keyword):
             return {"KuwoMusicClient": []}
     monkeypatch.setattr(app_module.musicdl, "MusicClient", FakeClient)
-    app_module._search_one_source("KuwoMusicClient", "offline", 10)
+    app_module._search_one_source("MiguMusicClient", "offline", 10)
     assert captured["requests_overrides"] == {
-        "KuwoMusicClient": {"timeout": app_module.CONF["request_timeout"]}}
-    assert captured["clients_threadings"] == {"KuwoMusicClient": 1}
-    assert captured["init_music_clients_cfg"]["KuwoMusicClient"]["max_retries"] == 1
-    assert captured["init_music_clients_cfg"]["KuwoMusicClient"]["search_size_per_source"] == 10
+        "MiguMusicClient": {"timeout": app_module.CONF["request_timeout"]}}
+    assert captured["clients_threadings"] == {"MiguMusicClient": 1}
+    assert captured["init_music_clients_cfg"]["MiguMusicClient"]["max_retries"] == 1
+    assert captured["init_music_clients_cfg"]["MiguMusicClient"]["search_size_per_source"] == 10
     captured.clear()
-    app_module._search_one_source("KuwoMusicClient", "offline", 60)
-    assert captured["init_music_clients_cfg"]["KuwoMusicClient"]["search_size_per_source"] == app_module.CONF["search_page_cap"]
+    app_module._search_one_source("MiguMusicClient", "offline", 60)
+    assert captured["init_music_clients_cfg"]["MiguMusicClient"]["search_size_per_source"] == app_module.CONF["search_page_cap"]
 
 
 def test_restart_errors_and_one_research_restore_same_id(clean_state, monkeypatch):

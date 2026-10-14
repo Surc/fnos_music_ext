@@ -10,6 +10,10 @@ musicdl HTTP 服务：基于 FastAPI 包装 musicdl 库的共享音源微服务�
   - `/search` 查询到的曲目对象（含下载直链、防盗链请求头 `download_headers`、歌词 `lyric`、关键词 `keyword`）会自动写入内存缓存。
   - `/info` 和 `/stream` 直接基于 ID 从缓存获取曲目信息与流地址。
   - 若源站直链失效/过期，`/stream?proxy=true` 支持根据缓存的关键词自动触发重搜刷新重试。
+  - 酷我搜索使用独立的元数据接口，不逐曲解析下载直链。返回 `playback_status=unresolved`、
+    `verified=false`，没有 download_url；`/stream` 才按 RID 解析并检查音频头/实际时长。
+    验证失败返回 502，保留候选元数据。其他平台继续沿用原有可播直链搜索。
+    详细边界及 DAYBREAK'S BELL 排查见 [搜索诊断](../docs/KUWO_SEARCH_DIAGNOSIS.md)。
 
 ## API 端点
 
@@ -25,8 +29,10 @@ musicdl HTTP 服务：基于 FastAPI 包装 musicdl 库的共享音源微服务�
 
 | 环境变量 | 默认值 | 说明 |
 | :--- | :--- | :--- |
-| `MUSICDL_SOURCES` | `NeteaseMusicClient,KuwoMusicClient,MiguMusicClient` | 默认启用的音源列表（英文逗号分隔） |
-| `MUSICDL_SEARCH_TIMEOUT` | `25` | 单源搜索超时时间（秒） |
+| `MUSICDL_SOURCES` | `KuwoMusicClient,MiguMusicClient` | 默认启用的音源列表（英文逗号分隔） |
+| `MUSICDL_SEARCH_TIMEOUT` | `12` | 搜索响应预算（秒），部署配置可覆盖 |
+| `MUSICDL_REQUEST_TIMEOUT` | `5` | 源站网络请求超时（秒），慢网络需与搜索响应预算一起调整 |
+| `MUSICDL_SEARCH_PAGE_CAP` | `10` | musicdl 库其他平台的搜索封顶；酷我元数据用单页、最多 30 条 |
 | `MUSICDL_LIMIT_PER_SOURCE` | `10` | 单源默认最大返回条数 |
 | `MUSICDL_URL_TTL` | `1800` | 下载直链缓存有效期（秒） |
 | `MUSICDL_CACHE_MAX` | `3000` | 内存缓存最大条目数（超限淘汰旧数据） |

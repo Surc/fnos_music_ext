@@ -67,7 +67,7 @@ GET /music/api/v1/search/track?q=<关键词>&page=<页号>&size=<页大小>
 | --- | --- | --- |
 | 网易（musicbox） | ✅ | `/api/v1/search` 新增 `offset` 参数；CLI 无 offset，`offset>0` 直接走官方 web 搜索接口（`api/search/get/web`，原生 offset 分页） |
 | 洛雪（lxmusic） | ✅ | `/api/v1/search` 新增 `page` 参数，透传到五平台上游分页参数：kg `page`、wy `offset`、mg `pageNo`、tx `page_num`、kw `pn` |
-| musicdl | ❌ | musicdl 库 `search()` 无分页参数（`search_size_per_source` 为页大小且封顶 10 保延迟），只参与首屏聚合 |
+| musicdl | ❌ | 只参与首屏聚合；其他平台沿用库 search() 的 10 条封顶。未发布的酷我修复改用单页元数据接口，最多 30 条，不增加深分页 |
 
 配置（均可热重载、管理页「搜索」页可改）：
 
@@ -79,6 +79,9 @@ GET /music/api/v1/search/track?q=<关键词>&page=<页号>&size=<页大小>
 已知边界：kw 平台搜索后按标题相关度页内重排，跨页顺序可能轻微穿插（代理
 去重兜底）；各平台页内过滤（VIP/试听剔除）可能造成页边界少量缺条——上游
 原始流按页号无缝拼接，已是该架构下的最优解。
+
+未发布的酷我元数据/播放分离修复见 [KUWO_SEARCH_DIAGNOSIS.md](KUWO_SEARCH_DIAGNOSIS.md)。
+候选可以出现在搜索列表，但不代表已经验证可播放；实际校验在播放请求前完成。
 
 ## 4. 相关测试
 
