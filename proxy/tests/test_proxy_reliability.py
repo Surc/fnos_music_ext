@@ -499,6 +499,10 @@ async def test_metadata_recovers_backend_after_restart_once(monkeypatch):
 
 @pytest.mark.anyio
 async def test_startup_stall_is_bounded_and_closes_transport(monkeypatch):
+    monkeypatch.setitem(p.CONF, "kuwo_startup_timeout", 0.1)
+    async def no_recovery(*args):
+        return False
+    monkeypatch.setattr(p, "_recover_source", no_recovery)
     class Stalled(httpx.AsyncByteStream):
         closed = False
         async def __aiter__(self):
@@ -512,8 +516,8 @@ async def test_startup_stall_is_bounded_and_closes_transport(monkeypatch):
     before = time.monotonic()
     response = await p.stream_track(request("guid=online:kuwo:1"))
     assert response.status_code == 404
-    # 单次解析预算 6 秒（与进程内取链+网络抖动余量对齐），stall 必须被掐断
-    assert 5.8 < time.monotonic() - before < 6.6
+    # Configured startup deadline must still cancel and close a stalled body.
+    assert time.monotonic() - before < 1
     assert audio.closed
 
 
@@ -815,3 +819,26 @@ async def test_search_waits_until_keyword_is_quiet(monkeypatch):
     assert started_at[0] - origin >= 0.25
     assert all(entry.get("ts") == 0 and not entry.get("items") for entry in _cached("k1"))
     assert all(entry.get("ts") == 0 and not entry.get("items") for entry in _cached("k2"))
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize('method,delay', [('GET', 6.05), ('HEAD', 4.05)])
+async def test_kuwo_validation_can_outlast_old_proxy_startup_limit(monkeypatch, method, delay):
+    """Exercise real proxy opening, first bytes, and HEAD transport cleanup."""
+    req = request('guid=online:kuwo:142276943')
+    req.scope['method'] = method
+    audio = Audio()
+    async def service(request):
+        assert request.url.path == '/stream' and request.url.params['proxy'] == 'true'
+        await asyncio.sleep(delay)
+        return httpx.Response(200, headers={'content-type': 'audio/mpeg'}, stream=audio)
+    client = httpx.AsyncClient(transport=httpx.MockTransport(service), base_url='http://test')
+    monkeypatch.setattr(p.app.state, 'musicdl_client', client)
+    monkeypatch.setattr(p, '_register_full_fetch', lambda *a: None)
+    response = await p.stream_track(req)
+    assert response.status_code == 200
+    if method == 'GET':
+        assert await anext(response.body_iterator) == b'x' * 2048
+        await response.body_iterator.aclose()
+    assert audio.closed
+    await client.aclose()
