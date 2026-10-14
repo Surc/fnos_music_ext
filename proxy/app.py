@@ -168,6 +168,7 @@ CONF = {
     "lx_source_list": os.environ.get("LX_SOURCE_LIST", "[]"),
     "lyric_field": os.environ.get("FNMUSIC_LYRIC_FIELD", "data.lyric"),
     "search_timeout": float(os.environ.get("FNMUSIC_SEARCH_TIMEOUT", "15")),
+    "kuwo_startup_timeout": max(0.1, float(os.environ.get("FNMUSIC_KUWO_STARTUP_TIMEOUT", "40"))),
     "search_probe": os.environ.get("FNMUSIC_SEARCH_PROBE", "false").lower() in ("true", "1", "yes"),
     "search_cache_ttl": float(os.environ.get("FNMUSIC_SEARCH_CACHE_TTL", "604800")),
     "late_page_wait_s": float(os.environ.get("FNMUSIC_LATE_PAGE_WAIT_S", "5.0")),
@@ -532,6 +533,7 @@ _ENV_WATCH_KEYS: dict[str, tuple[str, str]] = {
     "FNMUSIC_LLM_API_KEY": ("", "str"),
     "FNMUSIC_LLM_MODEL": ("llm_model", "str"),
     "FNMUSIC_SEARCH_TIMEOUT": ("search_timeout", "seconds"),
+    "FNMUSIC_KUWO_STARTUP_TIMEOUT": ("kuwo_startup_timeout", "seconds"),
     # issue #29：推荐构建预算/候选数/逐首校验运行期可调（recommend.py 动态读 os.environ）
     "FNMUSIC_RECOMMEND_BUDGET_S": ("", "str"),
     "FNMUSIC_RECOMMEND_CANDIDATES": ("", "str"),
@@ -4477,13 +4479,17 @@ async def _open_online_stream(request: Request, guid: str, range_header: str | N
             # 带断点续传的请求不切档——前后字节必须来自同一条流
             if (force_mp3 or _lossless_is_blacklisted(guid)) and not range_header:
                 params["quality"] = "mp3"
-            req = client.build_request("GET", "/stream", params=params, headers=headers)
+            req = client.build_request("GET", "/stream", params=params, headers=headers,
+                                       timeout=max(45.0, float(CONF["kuwo_startup_timeout"])))
         try:
             resp = await client.send(req, stream=True)
             content_type = resp.headers.get("content-type", "").lower()
             if (resp.status_code not in (200, 206)
                     or any(x in content_type for x in ("text/", "json"))
                     or resp.headers.get("content-encoding", "identity").strip().lower() not in ("", "identity")):
+                if via_musicdl:
+                    logger.warning("Musicdl startup rejected: guid=%s stage=service_stream status=%s",
+                                   guid, resp.status_code)
                 # Reject servers ignoring identity: decoded bytes cannot use encoded
                 # Content-Length/Range offsets, and must not enter the audio cache.
                 if source == "netease":
@@ -5581,7 +5587,8 @@ async def _stream_head_response(request: Request, guid: str, cached: str | None,
         return Response(status_code=full.status_code, headers=dict(full.headers))
     opened = None
     try:
-        opened = await asyncio.wait_for(_open_online_stream(request, guid, range_header), timeout=4.0)
+        budget = float(CONF["kuwo_startup_timeout"]) if source_from_online_guid(guid) == "kuwo" else 4.0
+        opened = await asyncio.wait_for(_open_online_stream(request, guid, range_header), timeout=budget)
     except Exception:
         opened = None
     if not opened:
@@ -5655,7 +5662,11 @@ async def stream_track(request: Request, subpath: str = ""):
     # Byte offsets are encoding-specific: do not cross sources on seek/probe.
     if should_cache(range_header) and item and request.query_params.get("_ext_rendition") != "1":
         candidates += [online_guid_from_item(x) for x in ordered_stream_alternatives(item)]
-    deadline = asyncio.get_running_loop().time() + 12.0
+    # Kuwo performs on-demand RID resolution + audio validation before streaming.
+    # Keep that work inside one bounded startup window, independent of search.
+    startup_budget = max(12.0, float(CONF["kuwo_startup_timeout"])) if any(
+        source_from_online_guid(c) == "kuwo" and _source_enabled(c) for c in candidates) else 12.0
+    deadline = asyncio.get_running_loop().time() + startup_budget
     for candidate in list(dict.fromkeys(candidates))[:3]:
         if not _source_enabled(candidate):
             continue
@@ -5670,7 +5681,8 @@ async def stream_track(request: Request, subpath: str = ""):
                 opened = await asyncio.wait_for(
                     _open_online_stream(request, candidate, range_header,
                                         fresh_url=attempt > 0, refresh=attempt > 0),
-                    timeout=min(6.0, remaining),
+                    timeout=min(float(CONF["kuwo_startup_timeout"])
+                                if source_from_online_guid(candidate) == "kuwo" else 6.0, remaining),
                 )
             except Exception as exc:
                 logger.warning("Stream startup failed for %s: %s", candidate, type(exc).__name__)
