@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "recorded_on": "2026-10-12",
+  "recorded_on": "2026-10-14",
   "timezone": "Asia/Shanghai",
   "project": {
     "repository": "https://github.com/Surc/fnos_music_ext",
@@ -407,8 +407,58 @@
           "checks_passed": 11,
           "pytest_passed_per_version": 1148,
           "pytest_skipped_per_version": 4,
-          "python_versions": ["3.11", "3.13"],
+          "python_versions": [
+            "3.11",
+            "3.13"
+          ],
           "final_head_status": "see_pull_request_checks"
+        },
+        "playback_follow_up": {
+          "recorded_on": "2026-10-14",
+          "base_head": "7b00ad42df5534b770d2644ea6f22769167a36b5",
+          "changes": [
+            "independent_30s_rid_budget_and_40s_kuwo_proxy_startup",
+            "skip_optional_lyrics_on_playback_preserve_cached_lyrics",
+            "reject_bad_audio_per_tier_before_falling_back_to_same_rid_mp3",
+            "url_free_stage_logs_and_nas_diagnostic_script"
+          ],
+          "real_api": {
+            "musicdl_version": "2.14.1",
+            "request_timeout_s": 10,
+            "resolve_timeout_s": 30,
+            "search_items": 30,
+            "target_present": true,
+            "search_elapsed_s": 5.4,
+            "flac_resolve": "HTTP 200 empty body",
+            "mp3_resolve": "HTTP 200 candidate returned",
+            "cdn_head_status": 200,
+            "origin_bytes": 16009,
+            "expected_duration_s": 252,
+            "actual_duration_s": 2.612,
+            "stream_status": 502,
+            "stream_elapsed_s": 19.58,
+            "redirect": false,
+            "info_verified": false
+          },
+          "availability_conclusion": "Current egress received short audio; cause (rights, region, egress or source policy) unconfirmed. Full target playback not verified.",
+          "local_targeted_tests": {
+            "passed": 78
+          },
+          "production_dependency_contract": "musicdl 2.14.1 offline: complete FLAC, rejected FLAC to complete MP3, both rejected; passed",
+          "diagnostic_script": "scripts/diagnose_kuwo.py",
+          "github_ci": "see current PR checks after browser submission; old head CI is historical only",
+          "fnos_device": "not_run",
+          "local_full_pytest": {
+            "python": "3.12",
+            "passed": 1101,
+            "failed": 56,
+            "skipped": 3,
+            "errors": 2,
+            "baseline_same_failure_nodes": 58
+          },
+          "remote_submission_status": "browser submission authorized on 2026-10-14 after GitHub API 403; see current PR head",
+          "merge_authorized": true,
+          "release_authorized": false
         }
       }
     }
